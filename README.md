@@ -18,7 +18,10 @@ Or install the `sym` command for the current user:
 sym examples/hello.sym
 ```
 
-The installer writes to `~/.local/bin/sym` by default.
+The installer writes to `~/.local/bin/sym` by default. If `ffplay` is not
+already available, it asks whether you want it to install FFmpeg using the detected
+system package manager. The default answer is **No**, so no extra system package is
+installed without explicit permission.
 
 ## Run
 
