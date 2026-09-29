@@ -1,4 +1,6 @@
+#define _POSIX_C_SOURCE 200809L
 #include <ctype.h>
+#include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -6,6 +8,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/wait.h>
 #include <termios.h>
 #include <unistd.h>
 
@@ -15,8 +20,79 @@ static char *s;
 static pos n;
 static int oldfl=-1,raw=0;
 static struct termios oldt;
-static void restore(void) { if(oldfl>=0) fcntl(STDIN_FILENO,F_SETFL,oldfl);
-	if(raw) tcsetattr(STDIN_FILENO,TCSANOW,&oldt); } static void caught(int sig) { restore(); _exit(128+sig); }
+
+typedef struct {
+	char **path;
+	size_t count,selected;
+	pid_t pid;
+} Audio;
+static Audio audio;
+
+static void audio_stop(void) {
+	if(audio.pid>0) {
+		pid_t r=waitpid(audio.pid,0,WNOHANG);
+		if(r==0) {
+			(void)kill(audio.pid,SIGTERM);
+			(void)waitpid(audio.pid,0,0);
+		}
+		audio.pid=0;
+	}
+}
+static void audio_free(void) {
+	audio_stop();
+	for(size_t i=0;i<audio.count;i++) free(audio.path[i]);
+	free(audio.path); audio.path=0; audio.count=audio.selected=0;
+}
+static int cmpstr(const void *a,const void *b) {
+	const char *const *sa=a,*const *sb=b;
+	return strcmp(*sa,*sb);
+}
+static int regular_file(const char *p) {
+	struct stat st;
+	return stat(p,&st)==0 && S_ISREG(st.st_mode);
+}
+static void audio_load_dir(const char *dir) {
+	DIR *dp=opendir(dir); struct dirent *de;
+	char **v=0; size_t len=0,cap=0;
+	if(!dp) return;
+	while((de=readdir(dp))!=0) {
+		size_t dl,nl; char *p;
+		if(de->d_name[0]=='.') continue;
+		dl=strlen(dir); nl=strlen(de->d_name);
+		p=malloc(dl+nl+2); if(!p) continue;
+		memcpy(p,dir,dl);
+		if(dl&&dir[dl-1]!='/') p[dl++]='/';
+		memcpy(p+dl,de->d_name,nl+1);
+		if(!regular_file(p)) { free(p); continue; }
+		if(len==cap) {
+			size_t nc=cap?cap*2:8;
+			char **nv=realloc(v,nc*sizeof(*nv));
+			if(!nv) { free(p); continue; }
+			v=nv; cap=nc;
+		}
+		v[len++]=p;
+	}
+	closedir(dp);
+	if(!len) { free(v); return; }
+	qsort(v,len,sizeof(*v),cmpstr);
+	audio.path=v; audio.count=len; audio.selected=0;
+}
+static void audio_play(void) {
+	pid_t p;
+	if(!audio.count) return;
+	audio_stop();
+	p=fork();
+	if(p==0) {
+		execlp("ffplay","ffplay","-nodisp","-autoexit","-loglevel","quiet",
+			audio.path[audio.selected],(char *)0);
+		_exit(127);
+	}
+	if(p>0) audio.pid=p;
+}
+static void restore(void) { audio_free();
+	if(oldfl>=0) fcntl(STDIN_FILENO,F_SETFL,oldfl);
+	if(raw) tcsetattr(STDIN_FILENO,TCSANOW,&oldt); }
+static void caught(int sig) { restore(); _exit(128+sig); }
 
 static char *load(const char *p) {
 	FILE *f=fopen(p,"rb"); long z; char *b; pos r=0;
@@ -48,30 +124,40 @@ static pos pair(pos p,int d,char same,char other) {
 	}
 	return -1;
 }
-static pos leave(pos p,int d) {
-	pos start=p;
-	int sq=0,cu=0;
-	for(p+=d;p>=0&&p<n;p+=d) {
-		char c=s[p];
-		if(d>0) {
-			if(c=='[') sq++; else if(c==']') { if(!sq) return p+1; sq--; }
-			if(c=='{') cu++; else if(c=='}'&&!(p>=4&&s[p-4]=='`'&&s[p-3]==')'&&s[p-2]=='#'&&isalpha((unsigned char)s[p-1]))) { if(!cu) return p+1; cu--; }
-		} else {
-			if(c==']') sq++; else if(c=='[') { if(!sq) return p-1; sq--; }
-			if(c=='}') cu++; else if(c=='{'&&!(p+4<n&&s[p+1]=='('&&s[p+2]==' '&&s[p+3]=='1'&&s[p+4]=='`')) { if(!cu) return p-1; cu--; }
+/* '~' breaks only the innermost enclosing [] loop. */
+static pos leave_loop(pos p,int d) {
+	int depth=0; pos q;
+	if(d>0) {
+		for(pos i=p-1;i>=0;i--) {
+			if(s[i]==']') depth++;
+			else if(s[i]=='[') {
+				if(depth) depth--;
+				else if((q=pair(i,1,'[',']'))>p) return q+1;
+			}
+		}
+	} else {
+		for(pos i=p+1;i<n;i++) {
+			if(s[i]=='[') depth++;
+			else if(s[i]==']') {
+				if(depth) depth--;
+				else if((q=pair(i,-1,']','['))>=0&&q<p) return q-1;
+			}
 		}
 	}
-	return start+d;
+	return p+d;
 }
 static u8 readnum(void) {
 	char b[64],*e; long x;
 	if(scanf("%63s",b)!=1) { clearerr(stdin); return 0; }
 	x=strtol(b,&e,10); return e==b?0:(u8)x;
 }
-static int memletter(char c) { return strchr("wWxXyYzZ",c)!=0; }
+static int memory_letter(char c) { return strchr("wWxXyYzZ",c)!=0; }
+static int audio_letter(char c) { return audio.count&&strchr("uUvV",c)!=0; }
+static int reserved_letter(char c) { return memory_letter(c)||audio_letter(c); }
 
 int main(int ac,char **av) {
 	int buffered=1,blocking=1,arg=1; char *file=0;
+	const char *sound_dir=0;
 	struct termios rawt;
 	atexit(restore); signal(SIGINT,caught); signal(SIGTERM,caught);
 	for(;arg<ac;arg++) {
@@ -79,18 +165,23 @@ int main(int ac,char **av) {
 		else if(!strcmp(av[arg],"-B")||!strcmp(av[arg],"--buffered")) buffered=1;
 		else if(!strcmp(av[arg],"-n")||!strcmp(av[arg],"--nonblocking")) blocking=0;
 		else if(!strcmp(av[arg],"-b")||!strcmp(av[arg],"--blocking")) blocking=1;
-		else if(!strcmp(av[arg],"-h")||!strcmp(av[arg],"--help")) {
-			puts("Usage: sym [-u|-B] [-n|-b] <program.sym>\n"
+		else if(!strcmp(av[arg],"-s")||!strcmp(av[arg],"--sounds")) {
+			if(++arg>=ac) { fputs("sym: --sounds requires a directory\n",stderr); return 1; }
+			sound_dir=av[arg];
+		} else if(!strcmp(av[arg],"-h")||!strcmp(av[arg],"--help")) {
+			puts("Usage: sym [-u|-B] [-n|-b] [-s DIR] <program.sym>\n"
 				 "  -u --unbuffered   immediate TTY input; disable canonical buffering/echo\n"
 				 "  -B --buffered     enable/default stdin buffering\n"
 				 "  -n --nonblocking  input returns 0 when unavailable\n"
-				 "  -b --blocking     wait for input (default)");
+				 "  -b --blocking     wait for input (default)\n"
+				 "  -s --sounds DIR   load sorted sounds for U/u/V/v async audio");
 			return 0;
 		} else if(!file) file=av[arg]; else {
 			fputs("sym: too many input files\n",stderr); return 1;
 		}
 	}
-	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] <program.sym>\n",stderr); return 1; }
+	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] [-s DIR] <program.sym>\n",stderr); return 1; }
+	if(sound_dir) audio_load_dir(sound_dir);
 	if(!buffered) {
 		setvbuf(stdin,0,_IONBF,0);
 		if(isatty(STDIN_FILENO)&&tcgetattr(STDIN_FILENO,&oldt)==0) {
@@ -118,7 +209,7 @@ int main(int ac,char **av) {
 
 		if(o==' ') { pc+=2*d; continue; }
 
-		if(isalpha((unsigned char)o)&&!memletter(o)) {
+		if(isalpha((unsigned char)o)&&!reserved_letter(o)) {
 			q=letter(pc,d,o); pc=q<0?pc+d:q; continue;
 		}
 
@@ -170,6 +261,15 @@ int main(int ac,char **av) {
 		case 'y': ay=*A; break;           case 'Y': *A=ay; break;
 		case 'z': my[ay]=*A; break;       case 'Z': *A=my[ay]; break;
 
+		case 'U':
+			if(audio.count) audio.selected=(audio.selected+1)%audio.count;
+			break;
+		case 'u':
+			if(audio.count) audio.selected=(audio.selected+audio.count-1)%audio.count;
+			break;
+		case 'V': audio_play(); break;
+		case 'v': audio_stop(); break;
+
 		case '#': pc+=((pos)*A+1)*d; continue;
 		case '{': d=1; pc++; continue;
 		case '}': d=-1; pc--; continue;
@@ -179,7 +279,7 @@ int main(int ac,char **av) {
 		case ']':
 			if(d>0&&(q=pair(pc,-1,']','['))>=0) { pc=q+1; continue; }
 			break;
-		case '~': pc=leave(pc,d); continue;
+		case '~': pc=leave_loop(pc,d); continue;
 
 		case '(':
 		case ')':
