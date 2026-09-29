@@ -91,6 +91,12 @@ The current VM includes:
 
 See [docs/LANGUAGE.md](docs/LANGUAGE.md) for the instruction reference.
 
+## Public domain
+
+Symblicity is dedicated to the public domain under **CC0 1.0 Universal**.
+You may copy, modify, distribute, embed, port, or sell it without asking
+permission or providing attribution. See [LICENSE](LICENSE).
+
 ## Repository layout
 
 ```text
