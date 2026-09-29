@@ -1,0 +1,6 @@
+VT'vt
+	Run with: sym --sounds ./sounds --dual-audio examples/dual_sound.sym
+	V starts the selected sound on channel 1.
+	T starts that same selected sound on channel 2.
+	' waits for one input byte.
+	v and t stop channels 1 and 2.

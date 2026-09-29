@@ -104,10 +104,18 @@ While at least one sound is loaded:
 
 - `U`: select the next sound, wrapping.
 - `u`: select the previous sound, wrapping.
-- `V`: asynchronously start the selected sound.
-- `v`: stop the currently playing sound.
+- `V`: asynchronously start the selected sound on channel 1.
+- `v`: stop channel 1.
+
+When `--dual-audio` / `-2` is enabled:
+
+- `T`: asynchronously start the currently selected sound on channel 2.
+- `t`: stop channel 2.
+- Both channels use the same shared sound address selected by `U/u`.
+- The channels play independently, so two sounds can overlap.
 
 Playback is implemented through `ffplay` and therefore requires FFmpeg when sound is used.
 
 If no sounds are loaded, `U/u/V/v` are not reserved: they retain ordinary Symblicity
-opposite-case letter-jump behavior.
+opposite-case letter-jump behavior. `T/t` are reserved only when sounds are
+loaded and dual-audio mode is enabled; otherwise they remain normal case-pair jumps.

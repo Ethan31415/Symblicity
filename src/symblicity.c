@@ -24,22 +24,24 @@ static struct termios oldt;
 typedef struct {
 	char **path;
 	size_t count,selected;
-	pid_t pid;
+	pid_t pid[2];
+	int dual;
 } Audio;
 static Audio audio;
 
-static void audio_stop(void) {
-	if(audio.pid>0) {
-		pid_t r=waitpid(audio.pid,0,WNOHANG);
+static void audio_stop(unsigned channel) {
+	pid_t pid=audio.pid[channel];
+	if(pid>0) {
+		pid_t r=waitpid(pid,0,WNOHANG);
 		if(r==0) {
-			(void)kill(audio.pid,SIGTERM);
-			(void)waitpid(audio.pid,0,0);
+			(void)kill(pid,SIGTERM);
+			(void)waitpid(pid,0,0);
 		}
-		audio.pid=0;
+		audio.pid[channel]=0;
 	}
 }
 static void audio_free(void) {
-	audio_stop();
+	audio_stop(0); audio_stop(1);
 	for(size_t i=0;i<audio.count;i++) free(audio.path[i]);
 	free(audio.path); audio.path=0; audio.count=audio.selected=0;
 }
@@ -77,17 +79,17 @@ static void audio_load_dir(const char *dir) {
 	qsort(v,len,sizeof(*v),cmpstr);
 	audio.path=v; audio.count=len; audio.selected=0;
 }
-static void audio_play(void) {
+static void audio_play(unsigned channel) {
 	pid_t p;
 	if(!audio.count) return;
-	audio_stop();
+	audio_stop(channel);
 	p=fork();
 	if(p==0) {
 		execlp("ffplay","ffplay","-nodisp","-autoexit","-loglevel","quiet",
 			audio.path[audio.selected],(char *)0);
 		_exit(127);
 	}
-	if(p>0) audio.pid=p;
+	if(p>0) audio.pid[channel]=p;
 }
 static void restore(void) { audio_free();
 	if(oldfl>=0) fcntl(STDIN_FILENO,F_SETFL,oldfl);
@@ -152,7 +154,11 @@ static u8 readnum(void) {
 	x=strtol(b,&e,10); return e==b?0:(u8)x;
 }
 static int memory_letter(char c) { return strchr("wWxXyYzZ",c)!=0; }
-static int audio_letter(char c) { return audio.count&&strchr("uUvV",c)!=0; }
+static int audio_letter(char c) {
+	if(!audio.count) return 0;
+	if(strchr("uUvV",c)) return 1;
+	return audio.dual&&strchr("tT",c)!=0;
+}
 static int reserved_letter(char c) { return memory_letter(c)||audio_letter(c); }
 
 int main(int ac,char **av) {
@@ -165,22 +171,24 @@ int main(int ac,char **av) {
 		else if(!strcmp(av[arg],"-B")||!strcmp(av[arg],"--buffered")) buffered=1;
 		else if(!strcmp(av[arg],"-n")||!strcmp(av[arg],"--nonblocking")) blocking=0;
 		else if(!strcmp(av[arg],"-b")||!strcmp(av[arg],"--blocking")) blocking=1;
+		else if(!strcmp(av[arg],"-2")||!strcmp(av[arg],"--dual-audio")) audio.dual=1;
 		else if(!strcmp(av[arg],"-s")||!strcmp(av[arg],"--sounds")) {
 			if(++arg>=ac) { fputs("sym: --sounds requires a directory\n",stderr); return 1; }
 			sound_dir=av[arg];
 		} else if(!strcmp(av[arg],"-h")||!strcmp(av[arg],"--help")) {
-			puts("Usage: sym [-u|-B] [-n|-b] [-s DIR] <program.sym>\n"
+			puts("Usage: sym [-u|-B] [-n|-b] [-s DIR] [-2] <program.sym>\n"
 				 "  -u --unbuffered   immediate TTY input; disable canonical buffering/echo\n"
 				 "  -B --buffered     enable/default stdin buffering\n"
 				 "  -n --nonblocking  input returns 0 when unavailable\n"
 				 "  -b --blocking     wait for input (default)\n"
-				 "  -s --sounds DIR   load sorted sounds for U/u/V/v async audio");
+				 "  -s --sounds DIR   load sorted sounds for async audio\n"
+				 "  -2 --dual-audio   enable T/t as channel-2 play/stop");
 			return 0;
 		} else if(!file) file=av[arg]; else {
 			fputs("sym: too many input files\n",stderr); return 1;
 		}
 	}
-	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] [-s DIR] <program.sym>\n",stderr); return 1; }
+	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] [-s DIR] [-2] <program.sym>\n",stderr); return 1; }
 	if(sound_dir) audio_load_dir(sound_dir);
 	if(!buffered) {
 		setvbuf(stdin,0,_IONBF,0);
@@ -267,8 +275,10 @@ int main(int ac,char **av) {
 		case 'u':
 			if(audio.count) audio.selected=(audio.selected+audio.count-1)%audio.count;
 			break;
-		case 'V': audio_play(); break;
-		case 'v': audio_stop(); break;
+		case 'V': audio_play(0); break;
+		case 'v': audio_stop(0); break;
+		case 'T': audio_play(1); break;
+		case 't': audio_stop(1); break;
 
 		case '#': pc+=((pos)*A+1)*d; continue;
 		case '{': d=1; pc++; continue;

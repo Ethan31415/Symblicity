@@ -43,6 +43,9 @@ Pass a directory of sound files to the VM:
 
 ```sh
 sym --sounds ./sounds program.sym
+
+# Optional second playback channel
+sym --sounds ./sounds --dual-audio program.sym
 ```
 
 Files in the directory are loaded into a deterministic, alphabetically sorted
@@ -50,14 +53,25 @@ sound array. When at least one sound is loaded:
 
 - `U` selects the next sound, wrapping at the end.
 - `u` selects the previous sound, wrapping at the beginning.
-- `V` starts the selected sound asynchronously.
-- `v` stops the currently playing sound.
+- `V` starts the selected sound asynchronously on channel 1.
+- `v` stops channel 1.
+
+With `--dual-audio` (or `-2`) enabled:
+
+- `T` starts the same currently selected sound on channel 2.
+- `t` stops channel 2.
+- Both channels share the one sound address controlled by `U/u`.
+- `VT` starts the same sound on both channels simultaneously.
+- `VUT` starts the current sound on channel 1, moves to the next address,
+  then starts that sound on channel 2.
 
 Playback uses `ffplay`, so install FFmpeg if you want sound. The interpreter
 itself has no audio-library build dependency.
 
 If no sounds are loaded, `U`, `u`, `V`, and `v` retain their normal Symblicity
-behavior as opposite-case directional letter jump.
+behavior as opposite-case directional letter jumps. `T/t` are reserved only
+when sounds are loaded and dual-audio mode is enabled; otherwise they remain
+ordinary directional letter jumps.
 
 ## Current language notes
 
