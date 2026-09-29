@@ -86,8 +86,18 @@ static void audio_play(unsigned channel) {
 	audio_stop(channel);
 	p=fork();
 	if(p==0) {
-		execlp("ffplay","ffplay","-nodisp","-autoexit","-loglevel","quiet",
-			audio.path[audio.selected],(char *)0);
+		int fd;
+		/* Audio must never compete with the VM for terminal input. */
+		signal(SIGINT,SIG_DFL);
+		signal(SIGTERM,SIG_DFL);
+		(void)setsid();
+		fd=open("/dev/null",O_RDONLY);
+		if(fd>=0) {
+			(void)dup2(fd,STDIN_FILENO);
+			if(fd!=STDIN_FILENO) close(fd);
+		}
+		execlp("ffplay","ffplay","-nostdin","-nodisp","-autoexit",
+			"-loglevel","quiet",audio.path[audio.selected],(char *)0);
 		_exit(127);
 	}
 	if(p>0) audio.pid[channel]=p;
