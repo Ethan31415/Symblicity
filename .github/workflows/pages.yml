@@ -6,6 +6,7 @@ on:
     paths:
       - 'web/site.tar.gz'
       - 'web/patch_site.py'
+      - 'web/make_battleship_sounds.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
@@ -31,6 +32,10 @@ jobs:
         run: |
           mkdir -p _site
           tar -xzf web/site.tar.gz -C _site
+
+      - name: Generate Battleship audio
+        run: |
+          python3 web/make_battleship_sounds.py _site/audio
 
       - name: Apply browser hotfixes
         run: |
