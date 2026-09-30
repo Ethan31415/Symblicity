@@ -121,15 +121,28 @@ opposite-case letter-jump behavior. `T/t` are reserved only when sounds are
 loaded and dual-audio mode is enabled; otherwise they remain normal case-pair jumps.
 
 
-## Timed terminal input
+## Configurable input wait
 
 ```sh
-sym -u --input-timeout 80 program.sym
+sym -u --input-wait 80 program.sym
 ```
 
-Character input waits up to the requested number of milliseconds and returns 0
-on timeout. This is intended for ESC/arrow-sequence decoding without the
-CPU-intensive busy loop caused by nonblocking input.
+The interpreter-wide input wait applies to both `'` character input and `.` numeric input:
+
+- `--input-wait infinite` or `--input-wait -1`: block indefinitely (default).
+- `--input-wait 0`: nonblocking poll.
+- `--input-wait N`: wait up to N milliseconds whenever the instruction needs more input, where N is 0..60000.
+- `--input-timeout` is retained as a compatibility alias.
+
+Infinite mode preserves the original input semantics and leaves R2 unchanged.
+In finite/nonblocking mode, a completed input writes the value to A and sets
+R2=1. Timeout or EOF sets R2=0, leaves A unchanged, and completes the input
+instruction. A partial numeric token is discarded if it times out.
+
+The browser playground exposes the same setting as **Input wait (ms)**, with
+`-1` meaning infinite. The built-in Battleship example selects 80 ms so a
+standalone ESC can be distinguished from a multi-byte arrow-key escape sequence
+without a busy loop.
 
 ## Programming conventions
 

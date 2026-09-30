@@ -20,7 +20,7 @@ typedef uint8_t u8;
 typedef long pos;
 static char *s;
 static pos n;
-static int oldfl=-1,raw=0,input_timeout_ms=-1;
+static int raw=0,input_wait_ms=-1;
 static struct termios oldt;
 
 typedef struct {
@@ -109,7 +109,6 @@ static void audio_play(unsigned channel) {
 	if(p>0) audio.pid[channel]=p;
 }
 static void restore(void) { audio_free();
-	if(oldfl>=0) fcntl(STDIN_FILENO,F_SETFL,oldfl);
 	if(raw) tcsetattr(STDIN_FILENO,TCSANOW,&oldt); }
 static void caught(int sig) { restore(); _exit(128+sig); }
 
@@ -165,19 +164,55 @@ static pos leave_loop(pos p,int d) {
 	}
 	return p+d;
 }
-static int readchar(void) {
-	if(input_timeout_ms>=0) {
-		struct pollfd pfd={STDIN_FILENO,POLLIN,0};
-		int r;
-		do r=poll(&pfd,1,input_timeout_ms); while(r<0&&errno==EINTR);
-		if(r<=0) return EOF;
-	}
-	return getchar();
+static int read_byte_wait(unsigned char *out) {
+	struct pollfd pfd={STDIN_FILENO,POLLIN,0};
+	int r; ssize_t got;
+	do r=poll(&pfd,1,input_wait_ms); while(r<0&&errno==EINTR);
+	if(r==0) return 0;
+	if(r<0) return -1;
+	do got=read(STDIN_FILENO,out,1); while(got<0&&errno==EINTR);
+	if(got==1) return 1;
+	if(got==0) return -1;
+	if(errno==EAGAIN||errno==EWOULDBLOCK) return 0;
+	return -1;
+}
+static int readchar_timed(u8 *out) {
+	unsigned char c;
+	if(read_byte_wait(&c)!=1) return 0;
+	*out=(u8)c; return 1;
 }
 static u8 readnum(void) {
 	char b[64],*e; long x;
 	if(scanf("%63s",b)!=1) { clearerr(stdin); return 0; }
 	x=strtol(b,&e,10); return e==b?0:(u8)x;
+}
+static int readnum_timed(u8 *out) {
+	char b[64],*e; size_t len=0; long x;
+	unsigned char c; int rc;
+	for(;;) {
+		rc=read_byte_wait(&c);
+		if(rc<=0) return 0;
+		if(!isspace((unsigned char)c)) break;
+	}
+	for(;;) {
+		if(len+1<sizeof(b)) b[len++]=(char)c;
+		rc=read_byte_wait(&c);
+		if(rc==0) return 0;
+		if(rc<0||isspace((unsigned char)c)) break;
+	}
+	b[len]=0;
+	x=strtol(b,&e,10);
+	*out=e==b?0:(u8)x;
+	return 1;
+}
+static int parse_input_wait(const char *text,int *out) {
+	char *end; long ms;
+	if(!strcmp(text,"infinite")||!strcmp(text,"inf")||!strcmp(text,"-1")) {
+		*out=-1; return 1;
+	}
+	errno=0; ms=strtol(text,&end,10);
+	if(errno||*end||ms<0||ms>60000) return 0;
+	*out=(int)ms; return 1;
 }
 static int memory_letter(char c) { return strchr("wWxXyYzZ",c)!=0; }
 static int audio_letter(char c) {
@@ -188,7 +223,7 @@ static int audio_letter(char c) {
 static int reserved_letter(char c) { return memory_letter(c)||audio_letter(c); }
 
 int main(int ac,char **av) {
-	int buffered=1,blocking=1,arg=1; char *file=0;
+	int buffered=1,arg=1; char *file=0;
 	const char *sound_dir=0;
 	struct termios rawt;
 	atexit(restore);
@@ -199,28 +234,29 @@ int main(int ac,char **av) {
 	for(;arg<ac;arg++) {
 		if(!strcmp(av[arg],"-u")||!strcmp(av[arg],"--unbuffered")) buffered=0;
 		else if(!strcmp(av[arg],"-B")||!strcmp(av[arg],"--buffered")) buffered=1;
-		else if(!strcmp(av[arg],"-n")||!strcmp(av[arg],"--nonblocking")) blocking=0;
-		else if(!strcmp(av[arg],"-b")||!strcmp(av[arg],"--blocking")) blocking=1;
-		else if(!strcmp(av[arg],"--input-timeout")) {
-			char *end; long ms;
-			if(++arg>=ac) { fputs("sym: --input-timeout requires milliseconds\n",stderr); return 1; }
-			errno=0; ms=strtol(av[arg],&end,10);
-			if(errno||*end||ms<0||ms>60000) {
-				fputs("sym: --input-timeout must be 0..60000 ms\n",stderr); return 1;
+		else if(!strcmp(av[arg],"-n")||!strcmp(av[arg],"--nonblocking")) input_wait_ms=0;
+		else if(!strcmp(av[arg],"-b")||!strcmp(av[arg],"--blocking")) input_wait_ms=-1;
+		else if(!strcmp(av[arg],"--input-wait")||!strcmp(av[arg],"--input-timeout")) {
+			const char *flag=av[arg];
+			if(++arg>=ac) {
+				fprintf(stderr,"sym: %s requires milliseconds or infinite\n",flag); return 1;
 			}
-			input_timeout_ms=(int)ms;
+			if(!parse_input_wait(av[arg],&input_wait_ms)) {
+				fprintf(stderr,"sym: %s must be infinite, -1, or 0..60000 ms\n",flag); return 1;
+			}
 		}
 		else if(!strcmp(av[arg],"-2")||!strcmp(av[arg],"--dual-audio")) audio.dual=1;
 		else if(!strcmp(av[arg],"-s")||!strcmp(av[arg],"--sounds")) {
 			if(++arg>=ac) { fputs("sym: --sounds requires a directory\n",stderr); return 1; }
 			sound_dir=av[arg];
 		} else if(!strcmp(av[arg],"-h")||!strcmp(av[arg],"--help")) {
-			puts("Usage: sym [-u|-B] [-n|-b] [--input-timeout MS] [-s DIR] [-2] <program.sym>\n"
+			puts("Usage: sym [-u|-B] [--input-wait MS|infinite] [-s DIR] [-2] <program.sym>\n"
 				 "  -u --unbuffered   immediate TTY input; disable canonical buffering/echo\n"
 				 "  -B --buffered     enable/default stdin buffering\n"
-				 "  -n --nonblocking  input returns 0 when unavailable\n"
-				 "  -b --blocking     wait for input (default)\n"
-				 "  --input-timeout MS wait up to MS milliseconds for character input\n"
+				 "  -n --nonblocking  same as --input-wait 0\n"
+				 "  -b --blocking     same as --input-wait infinite (default)\n"
+				 "  --input-wait X    infinite/-1 blocks; 0 polls; N waits N milliseconds\n"
+				 "  --input-timeout X compatibility alias for --input-wait\n"
 				 "  -s --sounds DIR   load sorted sounds for async audio\n"
 				 "  -2 --dual-audio   enable T/t as channel-2 play/stop");
 			return 0;
@@ -228,7 +264,7 @@ int main(int ac,char **av) {
 			fputs("sym: too many input files\n",stderr); return 1;
 		}
 	}
-	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] [--input-timeout MS] [-s DIR] [-2] <program.sym>\n",stderr); return 1; }
+	if(!file) { fputs("Usage: sym [-u|-B] [--input-wait MS|infinite] [-s DIR] [-2] <program.sym>\n",stderr); return 1; }
 	if(sound_dir) audio_load_dir(sound_dir);
 	if(!buffered) {
 		setvbuf(stdin,0,_IONBF,0);
@@ -236,12 +272,6 @@ int main(int ac,char **av) {
 			rawt=oldt; rawt.c_lflag&=(tcflag_t)~(ICANON|ECHO);
 			rawt.c_cc[VMIN]=1; rawt.c_cc[VTIME]=0;
 			if(tcsetattr(STDIN_FILENO,TCSANOW,&rawt)==0) raw=1;
-		}
-	}
-	if(!blocking) {
-		oldfl=fcntl(STDIN_FILENO,F_GETFL,0);
-		if(oldfl<0||fcntl(STDIN_FILENO,F_SETFL,oldfl|O_NONBLOCK)<0) {
-			perror("sym: nonblocking stdin"); return 1;
 		}
 	}
 	if(!(s=load(file))) { perror(file); return 1; }
@@ -299,9 +329,20 @@ int main(int ac,char **av) {
 			break;
 		case '_': bottom=!bottom; break;
 
-		case '\'': { int c=readchar(); *A=(u8)(c==EOF?0:c); if(c==EOF) clearerr(stdin); } break;
+		case '\'':
+			if(input_wait_ms<0) {
+				int c=getchar(); *A=(u8)(c==EOF?0:c); if(c==EOF) clearerr(stdin);
+			} else {
+				u8 v; if(readchar_timed(&v)) { *A=v; r[2]=1; } else r[2]=0;
+			}
+			break;
 		case '"': putchar(*A); fflush(stdout); break;
-		case '.': *A=readnum(); break;
+		case '.':
+			if(input_wait_ms<0) *A=readnum();
+			else {
+				u8 v; if(readnum_timed(&v)) { *A=v; r[2]=1; } else r[2]=0;
+			}
+			break;
 		case ',': printf("%u",(unsigned)*A); fflush(stdout); break;
 
 		case 'w': aw=*A; break;           case 'W': *A=aw; break;

@@ -14,8 +14,17 @@ $(BIN): $(SRC)
 	$(CC) $(CFLAGS) $(SRC) -o $(BIN)
 
 test: $(BIN)
-	@test "$$($(BIN) examples/hello.sym)" = "HelloWorld!"
-	@echo "Symblicity smoke test passed"
+	@test "$($(BIN) examples/hello.sym)" = "HelloWorld!"
+	@tmp=$(mktemp); trap 'rm -f "$tmp"' EXIT; \
+		printf "%s" "0'?8," > "$tmp"; \
+		test "$(printf "" | $(BIN) --input-wait 0 "$tmp")" = "1"; \
+		test "$(printf "A" | $(BIN) --input-wait 50 "$tmp")" = "64"; \
+		test "$(printf "A" | $(BIN) "$tmp")" = "65"; \
+		printf "%s" "0.?8," > "$tmp"; \
+		test "$(printf "" | $(BIN) --input-wait 0 "$tmp")" = "1"; \
+		test "$(printf "42\n" | $(BIN) --input-wait 50 "$tmp")" = "41"; \
+		test "$(printf "42\n" | $(BIN) "$tmp")" = "42"
+	@echo "Symblicity smoke/input-wait tests passed"
 
 install: $(BIN)
 	install -d "$(DESTDIR)$(PREFIX)/bin"

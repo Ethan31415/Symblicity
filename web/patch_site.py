@@ -256,6 +256,264 @@ app = app.replace(
     1,
 )
 
+# General interpreter-wide input wait. -1 keeps the historical blocking
+# behavior; finite values apply to both character and numeric input and expose
+# completion through R2 without manufacturing a zero byte on timeout.
+app = app.replace("let timedCharInput = false;\n", "", 1)
+app = app.replace(
+    "const audioStateEl = $('#audio-state');",
+    "const audioStateEl = $('#audio-state');\nconst inputWaitEl = $('#input-wait');",
+    1,
+)
+
+old_wait = """  } else if (result.status === 'wait_char' || result.status === 'wait_number') {
+    setStatus('Waiting for input -- click the terminal and type', 'wait');
+    terminalEl.focus();
+    // Match the native Battleship launcher without busy-waiting: one timeout
+    // produces a zero byte, then the VM can decide whether it was standalone ESC.
+    if (result.status === 'wait_char' && timedCharInput) {
+      waitTimer = setTimeout(() => {
+        waitTimer = null;
+        if (!running || vm.waiting !== 'char') return;
+        vm.queueBytes([0]);
+        continueRun();
+      }, 80);
+    }
+  } else {"""
+new_wait = """  } else if (result.status === 'wait_char' || result.status === 'wait_number') {
+    armInputTimeout(result, () => { if (running) continueRun(); });
+  } else {"""
+if old_wait not in app:
+    raise SystemExit("Could not locate browser input wait handling")
+app = app.replace(old_wait, new_wait, 1)
+app = app.replace(
+    "    timedCharInput = battleship || exampleSel.value === 'battleship';\n",
+    "",
+    1,
+)
+
+cancel_wait = """function cancelWaitTimer() {
+  if (waitTimer !== null) clearTimeout(waitTimer);
+  waitTimer = null;
+}
+"""
+input_wait_helpers = """function cancelWaitTimer() {
+  if (waitTimer !== null) clearTimeout(waitTimer);
+  waitTimer = null;
+}
+
+function readInputWait() {
+  const value = Number.parseInt(inputWaitEl.value, 10);
+  if (!Number.isFinite(value) || value < 0) return -1;
+  return Math.min(60000, value);
+}
+
+function armInputTimeout(result, resume) {
+  const expected = result.status === 'wait_char' ? 'char' : 'number';
+  const wait = vm.inputWaitMs;
+  setStatus(wait < 0
+    ? 'Waiting for input -- click the terminal and type'
+    : `Waiting up to ${wait} ms for input -- click the terminal and type`, 'wait');
+  terminalEl.focus();
+  if (wait < 0) return;
+  waitTimer = setTimeout(() => {
+    waitTimer = null;
+    if (vm.waiting !== expected) return;
+    if (!vm.timeoutInput()) return;
+    if (resume) resume();
+    else { updateState(vm.state()); setStatus('Input timed out', 'wait'); }
+  }, wait);
+}
+"""
+if cancel_wait not in app:
+    raise SystemExit("Could not locate cancelWaitTimer()")
+app = app.replace(cancel_wait, input_wait_helpers, 1)
+
+app = app.replace(
+    """    terminal.reset();
+    vm.reset(source.value);
+    running = true;""",
+    """    terminal.reset();
+    vm.setInputWait(readInputWait());
+    vm.reset(source.value);
+    running = true;""",
+    1,
+)
+app = app.replace(
+    """  terminal.reset();
+  vm.reset(source.value);
+  setStatus('Reset');""",
+    """  terminal.reset();
+  vm.setInputWait(readInputWait());
+  vm.reset(source.value);
+  setStatus('Reset');""",
+    1,
+)
+
+app = app.replace(
+    """    source.value = '63"4320"38""@10"\6438"\"10"$"\489"$50"';
+    audioSel.value = 'none';""",
+    """    source.value = '63"4320"38""@10"\6438"\"10"$"\489"$50"';
+    audioSel.value = 'none';
+    inputWaitEl.value = '-1';""",
+    1,
+)
+app = app.replace(
+    """    source.value = "VT'vt";
+    audioSel.value = 'battleship';""",
+    """    source.value = "VT'vt";
+    audioSel.value = 'battleship';
+    inputWaitEl.value = '-1';""",
+    1,
+)
+app = app.replace(
+    """    source.value = BATTLESHIP_SOURCE;
+    exampleSel.value = 'battleship';
+    audioSel.value = 'battleship';""",
+    """    source.value = BATTLESHIP_SOURCE;
+    exampleSel.value = 'battleship';
+    audioSel.value = 'battleship';
+    inputWaitEl.value = '80';""",
+    1,
+)
+
+old_terminal_listener = """terminalEl.addEventListener('keydown', (ev) => {
+  if (!running) return;
+  const bytes = keyBytes(ev);
+  if (!bytes) return;
+  ev.preventDefault();
+  cancelWaitTimer();
+  vm.queueBytes(bytes);
+  continueRun();
+});"""
+new_terminal_listener = """terminalEl.addEventListener('keydown', (ev) => {
+  if (!running && !vm.waiting) return;
+  const bytes = keyBytes(ev);
+  if (!bytes) return;
+  ev.preventDefault();
+  const wasWaiting = vm.waiting;
+  cancelWaitTimer();
+  vm.queueBytes(bytes);
+  if (running) {
+    continueRun();
+  } else if (wasWaiting) {
+    const result = vm.step();
+    updateState(vm.state());
+    scheduleTerminalRender();
+    if (result.status === 'wait_char' || result.status === 'wait_number') armInputTimeout(result, null);
+    else setStatus(result.status === 'ok' ? 'Input received' : result.status);
+  }
+});"""
+if old_terminal_listener not in app:
+    raise SystemExit("Could not locate terminal key handler")
+app = app.replace(old_terminal_listener, new_terminal_listener, 1)
+
+old_step = """stepBtn.addEventListener('click', async () => {
+  stopProgram(false);
+  await audio.unlock();
+  await prepareAudioFromSelection();
+  if (vm.originalSource !== source.value || vm.stopped) { terminal.reset(); vm.reset(source.value); }
+  const result = vm.step();
+  updateState(vm.state()); scheduleTerminalRender();
+  setStatus(result.status === 'ok' ? 'Stepped one instruction' : result.status);
+});"""
+new_step = """stepBtn.addEventListener('click', async () => {
+  stopProgram(false);
+  await audio.unlock();
+  await prepareAudioFromSelection();
+  vm.setInputWait(readInputWait());
+  if (vm.originalSource !== source.value || vm.stopped) { terminal.reset(); vm.reset(source.value); }
+  const result = vm.step();
+  updateState(vm.state()); scheduleTerminalRender();
+  if (result.status === 'wait_char' || result.status === 'wait_number') armInputTimeout(result, null);
+  else setStatus(result.status === 'ok' ? 'Stepped one instruction' : result.status);
+});"""
+if old_step not in app:
+    raise SystemExit("Could not locate Step handler")
+app = app.replace(old_step, new_step, 1)
+
+app = app.replace(
+    """soundFiles.addEventListener('change', async () => {""",
+    """inputWaitEl.addEventListener('change', () => {
+  const wait = readInputWait();
+  inputWaitEl.value = String(wait);
+  vm.setInputWait(wait);
+  if (running && vm.waiting) continueRun();
+});
+
+soundFiles.addEventListener('change', async () => {""",
+    1,
+)
+
+vm_path = root / 'symblicity.js'
+vm = vm_path.read_text()
+vm = vm.replace(
+    """    this.maxStack = options.maxStack || 4096;
+    this.audio = options.audio || null;
+    this.reset('');""",
+    """    this.maxStack = options.maxStack || 4096;
+    this.audio = options.audio || null;
+    this.inputWaitMs = -1;
+    this.setInputWait(options.inputWaitMs ?? -1);
+    this.reset('');""",
+    1,
+)
+vm = vm.replace(
+    """  queueText(text) {
+    const bytes = new TextEncoder().encode(text);
+    this.queueBytes(bytes);
+  }
+
+  findc(p, d, c) {""",
+    """  queueText(text) {
+    const bytes = new TextEncoder().encode(text);
+    this.queueBytes(bytes);
+  }
+
+  setInputWait(ms) {
+    const n = Number(ms);
+    this.inputWaitMs = Number.isFinite(n) && n >= 0
+      ? Math.min(60000, Math.trunc(n))
+      : -1;
+  }
+
+  timeoutInput() {
+    if (!this.waiting || this.inputWaitMs < 0) return false;
+    if (this.waiting === 'number') this.input.length = 0;
+    this.r[2] = 0;
+    this.waiting = null;
+    this.pc += this.d;
+    this.onState(this.state());
+    return true;
+  }
+
+  findc(p, d, c) {""",
+    1,
+)
+vm = vm.replace(
+    """        this.A = this.input.shift();
+        this.waiting = null;
+        break;""",
+    """        this.A = this.input.shift();
+        if (this.inputWaitMs >= 0) this.r[2] = 1;
+        this.waiting = null;
+        break;""",
+    1,
+)
+vm = vm.replace(
+    """        this.A = v;
+        this.waiting = null;
+        break;""",
+    """        this.A = v;
+        if (this.inputWaitMs >= 0) this.r[2] = 1;
+        this.waiting = null;
+        break;""",
+    1,
+)
+if "timeoutInput()" not in vm:
+    raise SystemExit("Browser VM input wait patch failed")
+vm_path.write_text(vm)
+
 # Replace the synthesized built-in audio with the exact OGG assets generated
 # from the same deterministic source used by the native Battleship package.
 old_builtin = """  async loadBuiltIn() {
@@ -324,7 +582,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v9"
+release = "v10"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
@@ -341,6 +599,17 @@ versioned_app.write_text(
 # new versioned application module.
 index_path = root / "index.html"
 index = index_path.read_text()
+input_wait_control = """      <label>Input wait (ms)
+        <input id="input-wait" type="number" min="-1" max="60000" step="1" value="-1"
+               inputmode="numeric" title="-1 = infinite/blocking; 0 = nonblocking; positive = milliseconds">
+      </label>
+"""
+run_button = '      <button id="run" class="primary">Run</button>'
+if 'id="input-wait"' not in index:
+    if run_button not in index:
+        raise SystemExit("Could not locate Run button for input-wait control")
+    index = index.replace(run_button, input_wait_control + run_button, 1)
+
 cleanup = """  <script>
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.getRegistrations()

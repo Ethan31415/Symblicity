@@ -48,9 +48,14 @@ sym -u -b program.sym
 
 - `-u`, `--unbuffered` -- immediate TTY input, with canonical buffering and echo disabled.
 - `-B`, `--buffered` -- normal/default terminal buffering.
-- `-n`, `--nonblocking` -- input returns 0 when no byte is available.
-- `-b`, `--blocking` -- wait for input (default).
-- `--input-timeout MS` -- wait up to the requested number of milliseconds for a character read before returning 0. Useful for ESC/arrow decoding without a nonblocking busy loop.
+- `-n`, `--nonblocking` -- alias for `--input-wait 0`.
+- `-b`, `--blocking` -- alias for `--input-wait infinite` (default).
+- `--input-wait infinite` / `--input-wait -1` -- preserve the traditional blocking input behavior.
+- `--input-wait 0` -- poll input without waiting.
+- `--input-wait N` -- wait up to N milliseconds (0..60000) whenever character or numeric input needs more data.
+- `--input-timeout` remains as a compatibility alias for `--input-wait`.
+
+In finite/nonblocking mode, successful `'` or `.` input sets R2 to 1. A timeout or EOF sets R2 to 0 and leaves A unchanged. Infinite mode preserves the original semantics and does not modify R2. The browser playground exposes the same value as an **Input wait** control; Battleship selects 80 ms by default.
 
 ## Asynchronous sound
 
