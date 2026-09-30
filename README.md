@@ -107,8 +107,10 @@ The current VM includes:
 - Opposite-parenthesis return anchors.
 - Character and numeric input/output through the selected A register.
 - Optional asynchronous sound instructions.
+- Directional function overloading: the same letter pair can select different forward and backward implementations.
+- Conventional `m...M` main entry and `e...E` program exit guards.
 
-See [docs/LANGUAGE.md](docs/LANGUAGE.md) for the instruction reference.
+See [docs/LANGUAGE.md](docs/LANGUAGE.md) for the instruction reference and [docs/CONVENTIONS.md](docs/CONVENTIONS.md) for the standard program-layout and function conventions.
 
 ## Browser playground
 
@@ -117,9 +119,7 @@ The complete static browser site is stored in `web/site.tar.gz` and deployed by
 ANSI terminal renderer, Battleship example, PWA files, and Web Audio integration.
 See `web/README.md` for local extraction instructions.
 
-Built-in Battleship audio is synthesized by Web Audio at runtime, so no audio
-files, FFmpeg installation, or browser codec support is required. Users can also
-load their own local audio files as a sorted Symblicity sound array.
+Built-in Battleship audio uses the same deterministic OGG assets as the native game. The Pages workflow generates those assets from `web/make_battleship_sounds.py`, and the browser decodes them through Web Audio. End users do not need FFmpeg installed. Users can also load their own local audio files as a sorted Symblicity sound array.
 
 ## Public domain
 
@@ -131,7 +131,7 @@ permission or providing attribution. See [LICENSE](LICENSE).
 
 ```text
 src/                  native C interpreter
-docs/                 language reference
+docs/                 language reference and coding conventions
 web/                  browser playground archive
 examples/             small native Symblicity programs
 .github/workflows/    GitHub Pages deployment

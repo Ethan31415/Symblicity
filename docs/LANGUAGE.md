@@ -83,7 +83,7 @@ These letters are reserved and do not perform case-pair jumps.
 - `[` / `]` form repeating loops.
 - `~` breaks only the innermost enclosing `[]` loop. Outside a loop it is a no-op.
 - `#` advances A+1 source positions in the current execution direction.
-- `(` and `)` form an opposite-symbol return-anchor mechanism.
+- `(` and `)` form an opposite-symbol return-anchor mechanism: the first symbol saves its position; the opposite symbol returns to and consumes that saved marker; encountering the same symbol again replaces the saved marker.
 - Backtick clears A.
 - Other letters jump to the next opposite-case occurrence in the current execution direction. No target means the letter is skipped.
 
@@ -130,3 +130,9 @@ sym -u --input-timeout 80 program.sym
 Character input waits up to the requested number of milliseconds and returns 0
 on timeout. This is intended for ESC/arrow-sequence decoding without the
 CPU-intensive busy loop caused by nonblocking input.
+
+## Programming conventions
+
+The VM rules above are separate from the project's standard source-layout and function idioms. Large programs conventionally use `m/M` to skip a function bank at startup, `e/E` to skip a second function bank at exit, and can give the same letter pair different forward- and backward-direction implementations.
+
+See [CONVENTIONS.md](CONVENTIONS.md) for the current standard program layout, directional function overloading, parenthesis return patterns, the canonical backward-entered function convention, and the A/`#` return trampoline.
