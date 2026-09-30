@@ -251,6 +251,64 @@ app = app.replace(
     1,
 )
 
+# Replace the synthesized built-in audio with the exact OGG assets generated
+# from the same deterministic source used by the native Battleship package.
+old_builtin = """  async loadBuiltIn() {
+    this.loading = true; this.error = ''; updateAudioState();
+    try {
+      await this.unlock();
+      this.stopAll();
+      this.names = ['00_background', '01_menu_nav', '02_menu_select', '03_hit', '04_sunk'];
+      this.buffers = [
+        this.backgroundBuffer(),
+        this.toneBuffer([660, 880], 0.07, 'sine', 0.5),
+        this.toneBuffer([440, 660, 880], 0.14, 'triangle', 0.45),
+        this.toneBuffer([110, 73.42], 0.20, 'triangle', 0.65),
+        this.toneBuffer([196, 146.83, 98], 0.52, 'triangle', 0.6),
+      ];
+      this.selected = 0;
+    } catch (err) {
+      this.error = err.message || String(err);
+      this.buffers = []; this.names = [];
+      throw err;
+    } finally {
+      this.loading = false; updateAudioState();
+    }
+  }"""
+new_builtin = """  async loadBuiltIn() {
+    this.loading = true; this.error = ''; updateAudioState();
+    try {
+      await this.unlock();
+      this.stopAll();
+      const files = [
+        '00_background.ogg',
+        '01_menu_nav.ogg',
+        '02_menu_select.ogg',
+        '03_hit.ogg',
+        '04_sunk.ogg',
+      ];
+      const decoded = [];
+      for (const file of files) {
+        const response = await fetch('./audio/' + file, { cache: 'no-store' });
+        if (!response.ok) throw new Error('Could not load ' + file);
+        decoded.push(await this.decode(file.replace(/\\.ogg$/, ''), await response.arrayBuffer()));
+      }
+      this.names = decoded.map(x => x.name);
+      this.buffers = decoded.map(x => x.buffer);
+      this.selected = 0;
+    } catch (err) {
+      this.error = err.message || String(err);
+      this.buffers = []; this.names = [];
+      throw err;
+    } finally {
+      this.loading = false; updateAudioState();
+    }
+  }"""
+if old_builtin in app:
+    app = app.replace(old_builtin, new_builtin, 1)
+elif "fetch('./audio/' + file" not in app:
+    raise SystemExit("Could not locate built-in audio loader")
+
 # Stop registering the old PWA service worker. It caused stale app.js files to
 # survive multiple otherwise-correct deployments.
 app = app.replace(
@@ -261,7 +319,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v8"
+release = "v9"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
