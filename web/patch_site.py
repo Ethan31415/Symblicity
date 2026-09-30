@@ -7,6 +7,11 @@ root = Path(sys.argv[1] if len(sys.argv) > 1 else '_site')
 app_path = root / 'app.js'
 sw_path = root / 'sw.js'
 battle_path = root / 'examples' / 'battleship.sym'
+repo_battle_path = Path('examples/battleship.sym')
+
+# Keep the deployed simulator's Battleship source in sync with the canonical
+# repository example instead of the older copy packed inside site.tar.gz.
+battle_path.write_bytes(repo_battle_path.read_bytes())
 
 app = app_path.read_text()
 battle_b64 = base64.b64encode(battle_path.read_bytes()).decode('ascii')

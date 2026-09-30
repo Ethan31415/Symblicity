@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
     paths:
+      - 'examples/battleship.sym'
       - 'web/site.tar.gz'
       - 'web/patch_site.py'
       - 'web/make_battleship_sounds.py'
