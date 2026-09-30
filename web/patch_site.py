@@ -160,6 +160,59 @@ if app.count("let running = false;") != 1:
 if app.index("let running = false;") > app.index("new SymblicityVM("):
     raise SystemExit("Browser startup invariant failed: running initialized after VM")
 
+# Firefox and other browsers may suspend Web Audio between the initiating click
+# and the VM's later T/V opcode. Make play() self-healing, make the background
+# clearly audible, and start Battleship music explicitly during launch.
+old_play_guard = """  play(channel, selected = this.selected) {
+    if (!this.context || !this.buffers[selected]) return;
+    this.stop(channel);
+"""
+new_play_guard = """  play(channel, selected = this.selected) {
+    if (!this.context || !this.buffers[selected]) return;
+    if (this.context.state !== 'running') {
+      this.context.resume().then(() => this.play(channel, selected)).catch(err => {
+        this.error = err.message || String(err);
+        updateAudioState();
+      });
+      return;
+    }
+    this.stop(channel);
+"""
+if old_play_guard in app:
+    app = app.replace(old_play_guard, new_play_guard, 1)
+
+app = app.replace(
+    "gain.gain.value = selected === 0 && channel === 1 ? 0.55 : 0.9;",
+    "gain.gain.value = selected === 0 && channel === 1 ? 2.4 : 0.9;",
+    1,
+)
+
+old_audio_state = """  const name = audio.names[audio.selected] || `#${audio.selected}`;
+  audioStateEl.textContent = `Audio: ${audio.count} sounds | selected ${audio.selected}: ${name}`;
+}"""
+new_audio_state = """  const name = audio.names[audio.selected] || `#${audio.selected}`;
+  const contextState = audio.context ? audio.context.state : 'none';
+  const active = [];
+  if (audio.channels[0]) active.push('ch1');
+  if (audio.channels[1]) active.push('ch2');
+  audioStateEl.textContent = `Audio: ${contextState} | ${audio.count} sounds | selected ${audio.selected}: ${name} | playing ${active.join('+') || 'none'}`;
+}"""
+if old_audio_state in app:
+    app = app.replace(old_audio_state, new_audio_state, 1)
+
+old_prepare = """    await prepareAudioFromSelection();
+    audio.dual = true;
+    terminal.reset();"""
+new_prepare = """    await prepareAudioFromSelection();
+    audio.dual = true;
+    if (battleship && audio.count) {
+      audio.selected = 0;
+      audio.play(1, 0);
+    }
+    terminal.reset();"""
+if old_prepare in app:
+    app = app.replace(old_prepare, new_prepare, 1)
+
 # Stop registering the old PWA service worker. It caused stale app.js files to
 # survive multiple otherwise-correct deployments.
 app = app.replace(
@@ -170,7 +223,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v6"
+release = "v7"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
