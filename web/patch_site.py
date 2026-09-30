@@ -569,6 +569,44 @@ if old_memory_ops not in vm:
     raise SystemExit("Could not locate browser memory opcodes")
 vm = vm.replace(old_memory_ops, new_memory_ops, 1)
 
+old_return_reset = """    this.ret = -1;
+    this.rs = '';"""
+new_return_reset = """    this.returnStack = [];
+    this.returnCaller = '';"""
+if old_return_reset not in vm:
+    raise SystemExit("Could not locate browser return reset")
+vm = vm.replace(old_return_reset, new_return_reset, 1)
+
+old_return_ops = """      case '(':
+      case ')':
+        if (this.ret >= 0 && this.rs !== o) {
+          q = this.ret;
+          this.ret = -1;
+          this.rs = '';
+          this.pc = q;
+          return { status: 'ok' };
+        }
+        this.ret = this.pc;
+        this.rs = o;
+        break;"""
+new_return_ops = """      case '(':
+      case ')':
+        if (this.returnStack.length && o !== this.returnCaller) {
+          const saved = this.returnStack.pop();
+          this.pc = saved + this.d;
+          if (!this.returnStack.length) this.returnCaller = '';
+          return { status: 'ok' };
+        }
+        if (!this.returnStack.length) this.returnCaller = o;
+        if (this.returnStack.length >= 4096) {
+          return this.fail('return stack overflow');
+        }
+        this.returnStack.push(this.pc);
+        break;"""
+if old_return_ops not in vm:
+    raise SystemExit("Could not locate browser return opcodes")
+vm = vm.replace(old_return_ops, new_return_ops, 1)
+
 vm_path.write_text(vm)
 
 # Replace the synthesized built-in audio with the exact OGG assets generated
@@ -639,7 +677,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v14"
+release = "v15"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
