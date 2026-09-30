@@ -39,6 +39,7 @@ sym -u -b program.sym
 - `-B`, `--buffered` — normal/default terminal buffering.
 - `-n`, `--nonblocking` — input returns 0 when no byte is available.
 - `-b`, `--blocking` — wait for input (default).
+- `--input-timeout MS` — wait up to the requested number of milliseconds for a character read before returning 0. Useful for ESC/arrow decoding without a nonblocking busy loop.
 
 ## Asynchronous sound
 
@@ -69,7 +70,8 @@ With `--dual-audio` (or `-2`) enabled:
   then starts that sound on channel 2.
 
 Playback uses `ffplay`, so install FFmpeg if you want sound. The interpreter
-itself has no audio-library build dependency.
+itself has no audio-library build dependency. The player is detached from terminal
+input and playback errors are no longer suppressed.
 
 If no sounds are loaded, `U`, `u`, `V`, and `v` retain their normal Symblicity
 behavior as opposite-case directional letter jumps. `T/t` are reserved only

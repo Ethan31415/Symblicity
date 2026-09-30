@@ -4,6 +4,7 @@
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdint.h>
 #include <signal.h>
 #include <stdio.h>
@@ -19,7 +20,7 @@ typedef uint8_t u8;
 typedef long pos;
 static char *s;
 static pos n;
-static int oldfl=-1,raw=0;
+static int oldfl=-1,raw=0,input_timeout_ms=-1;
 static struct termios oldt;
 
 typedef struct {
@@ -97,7 +98,8 @@ static void audio_play(unsigned channel) {
 			if(fd!=STDIN_FILENO) close(fd);
 		}
 		execlp("ffplay","ffplay","-nostdin","-nodisp","-autoexit",
-			"-loglevel","quiet",audio.path[audio.selected],(char *)0);
+			"-volume","100","-loglevel","error",
+			audio.path[audio.selected],(char *)0);
 		_exit(127);
 	}
 	if(p>0) audio.pid[channel]=p;
@@ -159,6 +161,15 @@ static pos leave_loop(pos p,int d) {
 	}
 	return p+d;
 }
+static int readchar(void) {
+	if(input_timeout_ms>=0) {
+		struct pollfd pfd={STDIN_FILENO,POLLIN,0};
+		int r;
+		do r=poll(&pfd,1,input_timeout_ms); while(r<0&&errno==EINTR);
+		if(r<=0) return EOF;
+	}
+	return getchar();
+}
 static u8 readnum(void) {
 	char b[64],*e; long x;
 	if(scanf("%63s",b)!=1) { clearerr(stdin); return 0; }
@@ -182,16 +193,26 @@ int main(int ac,char **av) {
 		else if(!strcmp(av[arg],"-B")||!strcmp(av[arg],"--buffered")) buffered=1;
 		else if(!strcmp(av[arg],"-n")||!strcmp(av[arg],"--nonblocking")) blocking=0;
 		else if(!strcmp(av[arg],"-b")||!strcmp(av[arg],"--blocking")) blocking=1;
+		else if(!strcmp(av[arg],"--input-timeout")) {
+			char *end; long ms;
+			if(++arg>=ac) { fputs("sym: --input-timeout requires milliseconds\n",stderr); return 1; }
+			errno=0; ms=strtol(av[arg],&end,10);
+			if(errno||*end||ms<0||ms>60000) {
+				fputs("sym: --input-timeout must be 0..60000 ms\n",stderr); return 1;
+			}
+			input_timeout_ms=(int)ms;
+		}
 		else if(!strcmp(av[arg],"-2")||!strcmp(av[arg],"--dual-audio")) audio.dual=1;
 		else if(!strcmp(av[arg],"-s")||!strcmp(av[arg],"--sounds")) {
 			if(++arg>=ac) { fputs("sym: --sounds requires a directory\n",stderr); return 1; }
 			sound_dir=av[arg];
 		} else if(!strcmp(av[arg],"-h")||!strcmp(av[arg],"--help")) {
-			puts("Usage: sym [-u|-B] [-n|-b] [-s DIR] [-2] <program.sym>\n"
+			puts("Usage: sym [-u|-B] [-n|-b] [--input-timeout MS] [-s DIR] [-2] <program.sym>\n"
 				 "  -u --unbuffered   immediate TTY input; disable canonical buffering/echo\n"
 				 "  -B --buffered     enable/default stdin buffering\n"
 				 "  -n --nonblocking  input returns 0 when unavailable\n"
 				 "  -b --blocking     wait for input (default)\n"
+				 "  --input-timeout MS wait up to MS milliseconds for character input\n"
 				 "  -s --sounds DIR   load sorted sounds for async audio\n"
 				 "  -2 --dual-audio   enable T/t as channel-2 play/stop");
 			return 0;
@@ -199,7 +220,7 @@ int main(int ac,char **av) {
 			fputs("sym: too many input files\n",stderr); return 1;
 		}
 	}
-	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] [-s DIR] [-2] <program.sym>\n",stderr); return 1; }
+	if(!file) { fputs("Usage: sym [-u|-B] [-n|-b] [--input-timeout MS] [-s DIR] [-2] <program.sym>\n",stderr); return 1; }
 	if(sound_dir) audio_load_dir(sound_dir);
 	if(!buffered) {
 		setvbuf(stdin,0,_IONBF,0);
@@ -270,7 +291,7 @@ int main(int ac,char **av) {
 			break;
 		case '_': bottom=!bottom; break;
 
-		case '\'': { int c=getchar(); *A=(u8)(c==EOF?0:c); if(c==EOF) clearerr(stdin); } break;
+		case '\'': { int c=readchar(); *A=(u8)(c==EOF?0:c); if(c==EOF) clearerr(stdin); } break;
 		case '"': putchar(*A); fflush(stdout); break;
 		case '.': *A=readnum(); break;
 		case ',': printf("%u",(unsigned)*A); fflush(stdout); break;

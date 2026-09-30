@@ -119,3 +119,14 @@ Playback is implemented through `ffplay` and therefore requires FFmpeg when soun
 If no sounds are loaded, `U/u/V/v` are not reserved: they retain ordinary Symblicity
 opposite-case letter-jump behavior. `T/t` are reserved only when sounds are
 loaded and dual-audio mode is enabled; otherwise they remain normal case-pair jumps.
+
+
+## Timed terminal input
+
+```sh
+sym -u --input-timeout 80 program.sym
+```
+
+Character input waits up to the requested number of milliseconds and returns 0
+on timeout. This is intended for ESC/arrow-sequence decoding without the
+CPU-intensive busy loop caused by nonblocking input.
