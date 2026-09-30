@@ -33,6 +33,11 @@ jobs:
           mkdir -p _site
           tar -xzf web/site.tar.gz -C _site
 
+      - name: Install FFmpeg for audio build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+
       - name: Generate Battleship audio
         run: |
           python3 web/make_battleship_sounds.py _site/audio
