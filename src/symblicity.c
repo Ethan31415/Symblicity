@@ -20,7 +20,7 @@ typedef uint8_t u8;
 typedef long pos;
 static char *s;
 static pos n;
-static int raw=0,input_wait_ms=-1;
+static int raw=0,input_wait_ms=-1,legacy_memory=0;
 static struct termios oldt;
 
 typedef struct {
@@ -118,6 +118,8 @@ static char *load(const char *p) {
 	fseek(f,0,SEEK_END); z=ftell(f); rewind(f);
 	if(z<0 || !(b=malloc((size_t)z+1))) { fclose(f); return 0; }
 	z=(long)fread(b,1,(size_t)z,f); fclose(f);
+	b[z]=0;
+	if(strstr(b,"\t@memory legacy-2x256")) legacy_memory=1;
 	for(long i=0;i<z;i++) {
 		if(b[i]=='\t') { while(i+1<z&&b[i+1]!='\n'&&b[i+1]!='\r') i++; continue; }
 		if(b[i]=='\n'||b[i]=='\r'||b[i]=='\f'||b[i]=='\v') continue;
@@ -348,10 +350,22 @@ int main(int ac,char **av) {
 
 		case 'w': aw=*A; break;           case 'W': *A=aw; break;
 		case 'y': ay=*A; break;           case 'Y': *A=ay; break;
-		case 'x': mem[(uint16_t)aw|((uint16_t)ay<<8)]=*A; break;
-		case 'X': *A=mem[(uint16_t)aw|((uint16_t)ay<<8)]; break;
-		case 'z': mem[(uint16_t)aw|((uint16_t)ay<<8)]=*A; break;
-		case 'Z': *A=mem[(uint16_t)aw|((uint16_t)ay<<8)]; break;
+		case 'x':
+			mem[legacy_memory ? (uint16_t)aw
+			                  : ((uint16_t)aw|((uint16_t)ay<<8))]=*A;
+			break;
+		case 'X':
+			*A=mem[legacy_memory ? (uint16_t)aw
+			                     : ((uint16_t)aw|((uint16_t)ay<<8))];
+			break;
+		case 'z':
+			mem[legacy_memory ? (uint16_t)(0x100u|ay)
+			                  : ((uint16_t)aw|((uint16_t)ay<<8))]=*A;
+			break;
+		case 'Z':
+			*A=mem[legacy_memory ? (uint16_t)(0x100u|ay)
+			                     : ((uint16_t)aw|((uint16_t)ay<<8))];
+			break;
 
 		case 'U':
 			if(audio.count) audio.selected=(audio.selected+1)%audio.count;

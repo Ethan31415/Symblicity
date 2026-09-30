@@ -82,6 +82,28 @@ address = (high << 8) | low
 in the same unified memory. This leaves one complete data-access pair redundant
 and available to be repurposed as a future additional address-byte extension.
 
+### Legacy two-bank compatibility
+
+Older programs that used the original two independent 256-byte memories can opt
+into a compatibility map with a tab-comment directive:
+
+```text
+<TAB>@memory legacy-2x256
+```
+
+The directive is detected before preprocessing and the complete comment line is
+then removed, so it contributes zero executable instruction positions.
+
+In this mode:
+
+```text
+w/W + x/X -> unified memory page 0x00 (0x0000-0x00FF)
+y/Y + z/Z -> unified memory page 0x01 (0x0100-0x01FF)
+```
+
+This is how the bundled Battleship program preserves its original memory layout.
+Programs without the directive use the normal combined 16-bit address model.
+
 All eight letters remain reserved and do not perform case-pair jumps.
 
 ## Control flow

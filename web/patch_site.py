@@ -535,7 +535,8 @@ old_memory_reset = """    this.mw = new Uint8Array(256);
     this.ay = 0;"""
 new_memory_reset = """    this.memory = new Uint8Array(65536);
     this.aw = 0;
-    this.ay = 0;"""
+    this.ay = 0;
+    this.legacyMemory = source.includes('\\t@memory legacy-2x256');"""
 if old_memory_reset not in vm:
     raise SystemExit("Could not locate browser memory reset")
 vm = vm.replace(old_memory_reset, new_memory_reset, 1)
@@ -552,11 +553,17 @@ new_memory_ops = """      case 'w': this.aw = this.A; break;
       case 'W': this.A = this.aw; break;
       case 'y': this.ay = this.A; break;
       case 'Y': this.A = this.ay; break;
-      case 'x': case 'z':
-        this.memory[(this.ay << 8) | this.aw] = this.A;
+      case 'x':
+        this.memory[this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw)] = this.A;
         break;
-      case 'X': case 'Z':
-        this.A = this.memory[(this.ay << 8) | this.aw];
+      case 'X':
+        this.A = this.memory[this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw)];
+        break;
+      case 'z':
+        this.memory[this.legacyMemory ? (0x100 | this.ay) : ((this.ay << 8) | this.aw)] = this.A;
+        break;
+      case 'Z':
+        this.A = this.memory[this.legacyMemory ? (0x100 | this.ay) : ((this.ay << 8) | this.aw)];
         break;"""
 if old_memory_ops not in vm:
     raise SystemExit("Could not locate browser memory opcodes")
@@ -632,7 +639,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v13"
+release = "v14"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
