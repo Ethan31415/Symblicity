@@ -4,6 +4,17 @@ Symblicity is a tiny 8-bit esoteric language built from single-character
 instructions, directional execution, selectable register banks, a double-ended
 stack, case-paired jumps, and compact function-like control flow.
 
+## Try it online
+
+Open the browser playground:
+
+**https://ethan31415.github.io/Symblicity/**
+
+The web VM runs entirely in the browser and includes the editor, terminal,
+register/state display, local `.sym` loading, Web Audio support, and a one-click
+Battleship demo. It does not require a compiler, FFmpeg, `ffplay`, or terminal
+configuration.
+
 ## Build
 
 ```sh
@@ -35,11 +46,11 @@ Interactive programs can use immediate terminal input:
 sym -u -b program.sym
 ```
 
-- `-u`, `--unbuffered` — immediate TTY input, with canonical buffering and echo disabled.
-- `-B`, `--buffered` — normal/default terminal buffering.
-- `-n`, `--nonblocking` — input returns 0 when no byte is available.
-- `-b`, `--blocking` — wait for input (default).
-- `--input-timeout MS` — wait up to the requested number of milliseconds for a character read before returning 0. Useful for ESC/arrow decoding without a nonblocking busy loop.
+- `-u`, `--unbuffered` -- immediate TTY input, with canonical buffering and echo disabled.
+- `-B`, `--buffered` -- normal/default terminal buffering.
+- `-n`, `--nonblocking` -- input returns 0 when no byte is available.
+- `-b`, `--blocking` -- wait for input (default).
+- `--input-timeout MS` -- wait up to the requested number of milliseconds for a character read before returning 0. Useful for ESC/arrow decoding without a nonblocking busy loop.
 
 ## Asynchronous sound
 
@@ -73,6 +84,9 @@ Playback uses `ffplay`, so install FFmpeg if you want sound. The interpreter
 itself has no audio-library build dependency. The player is detached from terminal
 input and playback errors are no longer suppressed.
 
+The browser VM maps the same audio instructions to the Web Audio API instead,
+so the online version has no native audio dependency.
+
 If no sounds are loaded, `U`, `u`, `V`, and `v` retain their normal Symblicity
 behavior as opposite-case directional letter jumps. `T/t` are reserved only
 when sounds are loaded and dual-audio mode is enabled; otherwise they remain
@@ -96,6 +110,17 @@ The current VM includes:
 
 See [docs/LANGUAGE.md](docs/LANGUAGE.md) for the instruction reference.
 
+## Browser playground
+
+The complete static browser site is stored in `web/site.tar.gz` and deployed by
+`.github/workflows/pages.yml`. The archive contains the JavaScript VM core, editor,
+ANSI terminal renderer, Battleship example, PWA files, and Web Audio integration.
+See `web/README.md` for local extraction instructions.
+
+Built-in Battleship audio is synthesized by Web Audio at runtime, so no audio
+files, FFmpeg installation, or browser codec support is required. Users can also
+load their own local audio files as a sorted Symblicity sound array.
+
 ## Public domain
 
 Symblicity is dedicated to the public domain under **CC0 1.0 Universal**.
@@ -105,11 +130,13 @@ permission or providing attribution. See [LICENSE](LICENSE).
 ## Repository layout
 
 ```text
-src/                 interpreter source
-docs/                language documentation
-examples/            small Symblicity programs
-Makefile              normal build/install target
-install.sh            user-local installer
-uninstall.sh          user-local uninstaller
-LICENSE               project license
+src/                  native C interpreter
+docs/                 language reference
+web/                  browser playground archive
+examples/             small native Symblicity programs
+.github/workflows/    GitHub Pages deployment
+Makefile               normal build/install target
+install.sh             user-local installer
+uninstall.sh           user-local uninstaller
+LICENSE                public-domain dedication
 ```
