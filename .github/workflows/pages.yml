@@ -5,6 +5,10 @@ on:
     branches: [main]
     paths:
       - 'examples/battleship.sym'
+      - 'src/symblicity.c'
+      - 'Makefile'
+      - 'README.md'
+      - 'docs/LANGUAGE.md'
       - 'web/site.tar.gz'
       - 'web/patch_site.py'
       - 'web/make_battleship_sounds.py'
