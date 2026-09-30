@@ -36,6 +36,13 @@ jobs:
         run: |
           python3 web/patch_site.py _site
 
+      - name: Validate browser JavaScript
+        run: |
+          cp _site/app.js /tmp/app.mjs
+          cp _site/symblicity.js /tmp/symblicity.mjs
+          node --check /tmp/app.mjs
+          node --check /tmp/symblicity.mjs
+
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
