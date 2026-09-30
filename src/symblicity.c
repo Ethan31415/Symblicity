@@ -97,7 +97,7 @@ static void audio_play(unsigned channel) {
 			(void)dup2(fd,STDIN_FILENO);
 			if(fd!=STDIN_FILENO) close(fd);
 		}
-		execlp("ffplay","ffplay","-nostdin","-nodisp","-autoexit",
+		execlp("ffplay","ffplay","-nodisp","-autoexit",
 			"-volume","100","-loglevel","error",
 			audio.path[audio.selected],(char *)0);
 		_exit(127);
