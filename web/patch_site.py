@@ -155,6 +155,13 @@ if terminal_anchor not in app:
     raise SystemExit("Could not locate terminal initialization in app.js")
 app = app.replace(terminal_anchor, state_block + "\n" + terminal_anchor, 1)
 
+if "let timedCharInput = false;" not in app:
+    app = app.replace(
+        "let lastStateRender = 0;\n\nconst terminal = new Terminal(terminalEl);",
+        "let lastStateRender = 0;\nlet timedCharInput = false;\n\nconst terminal = new Terminal(terminalEl);",
+        1,
+    )
+
 if app.count("let running = false;") != 1:
     raise SystemExit("Browser startup invariant failed: duplicate running declarations")
 if app.index("let running = false;") > app.index("new SymblicityVM("):
@@ -181,9 +188,26 @@ new_play_guard = """  play(channel, selected = this.selected) {
 if old_play_guard in app:
     app = app.replace(old_play_guard, new_play_guard, 1)
 
+old_background_end = """      data[i] = v * env;
+    }
+    return buffer;
+  }"""
+new_background_end = """      data[i] = v * env;
+    }
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i]));
+    if (peak > 0) {
+      const scale = 0.82 / peak;
+      for (let i = 0; i < data.length; i++) data[i] *= scale;
+    }
+    return buffer;
+  }"""
+if old_background_end in app:
+    app = app.replace(old_background_end, new_background_end, 1)
+
 app = app.replace(
     "gain.gain.value = selected === 0 && channel === 1 ? 0.55 : 0.9;",
-    "gain.gain.value = selected === 0 && channel === 1 ? 2.4 : 0.9;",
+    "gain.gain.value = selected === 0 && channel === 1 ? 1.0 : 0.9;",
     1,
 )
 
@@ -213,6 +237,20 @@ new_prepare = """    await prepareAudioFromSelection();
 if old_prepare in app:
     app = app.replace(old_prepare, new_prepare, 1)
 
+# Only Battleship needs the 80 ms zero-byte timeout for distinguishing a
+# standalone ESC from an arrow-key escape sequence. Ordinary Symblicity programs
+# should block at character input until the user actually types something.
+app = app.replace(
+    "    stopProgram(false);\n\n    // Do this before the first await",
+    "    stopProgram(false);\n    timedCharInput = battleship || exampleSel.value === 'battleship';\n\n    // Do this before the first await",
+    1,
+)
+app = app.replace(
+    "    if (result.status === 'wait_char') {",
+    "    if (result.status === 'wait_char' && timedCharInput) {",
+    1,
+)
+
 # Stop registering the old PWA service worker. It caused stale app.js files to
 # survive multiple otherwise-correct deployments.
 app = app.replace(
@@ -223,7 +261,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v7"
+release = "v8"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
