@@ -81,16 +81,17 @@ The effective function identity is the pair `(letter, execution direction)` rath
 
 The same rule works for other non-reserved letter pairs. Keep the intended matching entry as the nearest opposite-case occurrence in that direction.
 
-## Parenthesis return anchors
+## Parenthesis return stack
 
-`(` and `)` provide the standard lightweight return mechanism.
+`(` and `)` provide a dedicated nested return mechanism.
 
-- If no return marker exists, the encountered parenthesis saves its own position and type.
-- Encountering the opposite parenthesis returns to the saved position and consumes the marker.
-- Encountering the same parenthesis type again replaces the saved position.
-- The mechanism is independent of execution direction.
-
-This is one typed return marker, not an automatic call stack. Nested function calls therefore require manual state management or a convention specifically designed for nesting.
+- The return stack stores only source positions.
+- One shared caller character, either `(` or `)`, applies to the whole active stack.
+- When the stack is empty, the first encountered parenthesis becomes the caller and its current position is pushed.
+- While the stack is non-empty, encountering that same caller character pushes another current position.
+- Encountering the opposite parenthesis pops the top saved position and immediately resumes at `saved_position + current_direction`.
+- When the final position is popped, the shared caller character is cleared.
+- The return stack holds up to 4096 positions and is separate from the normal data stack.
 
 Both orientations are valid:
 
@@ -99,7 +100,7 @@ Both orientations are valid:
 ) ... (
 ```
 
-The opening symbol is whichever symbol establishes the anchor first; the opposite symbol performs the return.
+Because the saved position itself is stored, and the current direction is added only on return, the same call site resumes on the side appropriate to the direction at return time. Nested calls and recursion are supported.
 
 ## Canonical backward-entered function convention
 
@@ -131,7 +132,7 @@ def define(letter, body):
 
 The body is physically reversed because the function is entered and executed right-to-left. The current canonical use keeps these functions straight-line so their reverse execution does not create loop-direction ambiguity.
 
-This convention is especially useful for compact reusable output and helper routines. Because the VM has only one parenthesis return marker, the established generated code avoids nested calls inside these functions.
+This convention is especially useful for compact reusable output and helper routines. The parenthesis mechanism now uses a dedicated return stack, so these functions may make nested calls while preserving the active caller character.
 
 ## A/# return-trampoline convention
 
