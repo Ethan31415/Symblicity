@@ -113,7 +113,7 @@ All eight letters remain reserved and do not perform case-pair jumps.
 - `[` / `]` form repeating loops.
 - `~` breaks only the innermost enclosing `[]` loop. Outside a loop it is a no-op.
 - `#` advances A+1 source positions in the current execution direction.
-- `(` and `)` form an opposite-symbol return-anchor mechanism: the first symbol saves its position; the opposite symbol returns to and consumes that saved marker; encountering the same symbol again replaces the saved marker.
+- `(` and `)` use a dedicated 4096-entry return stack. When empty, the first encountered parenthesis becomes the caller character and pushes its current position. While active, the same caller character pushes more positions; the opposite parenthesis pops and immediately resumes at `saved_position + current_direction`. One caller character is shared by the whole stack and is cleared when the stack becomes empty.
 - Backtick clears A.
 - Other letters jump to the next opposite-case occurrence in the current execution direction. No target means the letter is skipped.
 
