@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'web/site.tar.gz'
+      - 'web/patch_site.py'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
 
