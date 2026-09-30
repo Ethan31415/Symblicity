@@ -41,8 +41,14 @@ install_ffplay() {
 	esac
 
 	if command -v apt-get >/dev/null 2>&1; then
-		run_root apt-get update
-		run_root apt-get install -y ffmpeg
+		# Do not run apt-get update here: unrelated broken third-party repositories
+		# can make update fail even when the cached Ubuntu/Debian package index
+		# already contains FFmpeg.
+		if ! run_root apt-get install -y ffmpeg; then
+			printf '%s\n' "Could not install FFmpeg with the current APT package index." >&2
+			printf '%s\n' "If APT reports a broken repository, repair/disable that repository and retry." >&2
+			return 0
+		fi
 	elif command -v dnf >/dev/null 2>&1; then
 		if ! run_root dnf install -y ffmpeg-free; then
 			run_root dnf install -y ffmpeg
