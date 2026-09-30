@@ -283,7 +283,7 @@ int main(int ac,char **av) {
 	u8 *A=&r[0],*B=&r[1];
 	size_t head=0,sp=0,mask=4095;
 	int bottom=0,d=1;
-	pos pc=0,ret=-1,q; char rs=0;
+	pos pc=0,q,ret_stack[4096]; size_t rsp=0; char caller=0;
 
 	while(pc>=0&&pc<n) {
 		char o=s[pc];
@@ -391,8 +391,18 @@ int main(int ac,char **av) {
 
 		case '(':
 		case ')':
-			if(ret>=0&&rs!=o) { q=ret; ret=-1; rs=0; pc=q; continue; }
-			ret=pc; rs=o; break;
+			if(rsp&&o!=caller) {
+				pc=ret_stack[--rsp]+d;
+				if(!rsp) caller=0;
+				continue;
+			}
+			if(!rsp) caller=o;
+			if(rsp==4096) {
+				fputs("sym: return stack overflow\n",stderr);
+				free(s); return 1;
+			}
+			ret_stack[rsp++]=pc;
+			break;
 
 		case '`': *A=0; break;
 
