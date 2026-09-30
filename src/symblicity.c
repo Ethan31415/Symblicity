@@ -34,11 +34,15 @@ static Audio audio;
 static void audio_stop(unsigned channel) {
 	pid_t pid=audio.pid[channel];
 	if(pid>0) {
-		pid_t r=waitpid(pid,0,WNOHANG);
-		if(r==0) {
+		pid_t r;
+		/*
+		 * ffplay runs in its own session/process group (PGID == child PID).
+		 * Kill the whole group so playback cannot survive if ffplay or its
+		 * audio backend leaves a descendant behind.
+		 */
+		if(kill(-pid,SIGTERM)<0 && errno==ESRCH)
 			(void)kill(pid,SIGTERM);
-			(void)waitpid(pid,0,0);
-		}
+		do r=waitpid(pid,0,0); while(r<0&&errno==EINTR);
 		audio.pid[channel]=0;
 	}
 }
@@ -187,7 +191,11 @@ int main(int ac,char **av) {
 	int buffered=1,blocking=1,arg=1; char *file=0;
 	const char *sound_dir=0;
 	struct termios rawt;
-	atexit(restore); signal(SIGINT,caught); signal(SIGTERM,caught);
+	atexit(restore);
+	signal(SIGINT,caught);
+	signal(SIGTERM,caught);
+	signal(SIGHUP,caught);
+	signal(SIGQUIT,caught);
 	for(;arg<ac;arg++) {
 		if(!strcmp(av[arg],"-u")||!strcmp(av[arg],"--unbuffered")) buffered=0;
 		else if(!strcmp(av[arg],"-B")||!strcmp(av[arg],"--buffered")) buffered=1;
