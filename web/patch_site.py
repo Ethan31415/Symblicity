@@ -1,0 +1,164 @@
+from pathlib import Path
+import base64
+import re
+import sys
+
+root = Path(sys.argv[1] if len(sys.argv) > 1 else '_site')
+app_path = root / 'app.js'
+sw_path = root / 'sw.js'
+battle_path = root / 'examples' / 'battleship.sym'
+
+app = app_path.read_text()
+battle_b64 = base64.b64encode(battle_path.read_bytes()).decode('ascii')
+
+# Keep the one-click demo self-contained. The previous version fetched the game
+# after the button was pressed, so a path/cache/network failure looked like a
+# dead button.
+if 'const BATTLESHIP_SOURCE = atob(' not in app:
+    app = app.replace(
+        "import { SymblicityVM } from './symblicity.js';\n",
+        "import { SymblicityVM } from './symblicity.js';\n\n"
+        "// Embedded at deploy time so Play Battleship never needs a second request.\n"
+        f"const BATTLESHIP_SOURCE = atob('{battle_b64}');\n",
+        1,
+    )
+
+# The original 12-second generated music buffer can hold up the UI noticeably
+# on slower browsers. A shorter loop sounds the same once looped and starts much
+# faster.
+app = app.replace('    const seconds = 12;', '    const seconds = 4;', 1)
+
+old_start = '''async function startProgram({ battleship = false } = {}) {
+  try {
+    stopProgram(false);
+    await audio.unlock();
+    if (battleship) {
+      audioSel.value = 'battleship';
+      await loadExample('battleship');
+    }
+    await prepareAudioFromSelection();
+    audio.dual = true;
+    terminal.reset();
+    vm.reset(source.value);
+    running = true;
+    runBtn.disabled = true;
+    stopBtn.disabled = false;
+    setStatus('Running', 'ok');
+    terminalEl.focus();
+    continueRun();
+  } catch (err) {
+    running = false;
+    setStatus(err.message || String(err), 'error');
+  }
+}'''
+
+new_start = '''async function startProgram({ battleship = false } = {}) {
+  const oldLabel = playBattleshipBtn.textContent;
+  try {
+    if (battleship) {
+      playBattleshipBtn.disabled = true;
+      playBattleshipBtn.textContent = 'Starting Battleship...';
+      setStatus('Starting Battleship...');
+    }
+    stopProgram(false);
+
+    // Do this before the first await that is unrelated to audio. Browsers only
+    // allow AudioContext resume reliably while handling the user's click.
+    await audio.unlock();
+
+    if (battleship) {
+      audioSel.value = 'battleship';
+      await loadExample('battleship');
+    }
+    await prepareAudioFromSelection();
+    audio.dual = true;
+    terminal.reset();
+    vm.reset(source.value);
+    running = true;
+    runBtn.disabled = true;
+    stopBtn.disabled = false;
+    setStatus(battleship ? 'Battleship running -- use the terminal below' : 'Running', 'ok');
+    if (battleship) {
+      playBattleshipBtn.textContent = 'Restart Battleship';
+      const panel = terminalEl.closest('.terminal-panel');
+      if (panel) panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+    terminalEl.focus({ preventScroll: true });
+    continueRun();
+  } catch (err) {
+    running = false;
+    setStatus(`Could not start: ${err.message || String(err)}`, 'error');
+    playBattleshipBtn.textContent = oldLabel;
+  } finally {
+    playBattleshipBtn.disabled = false;
+  }
+}'''
+
+if old_start in app:
+    app = app.replace(old_start, new_start, 1)
+elif 'Battleship running -- use the terminal below' not in app:
+    raise SystemExit('Could not locate startProgram() in app.js')
+
+old_load = '''  if (name === 'battleship') {
+    const res = await fetch('examples/battleship.sym');
+    if (!res.ok) throw new Error('Could not load Battleship example.');
+    source.value = await res.text();
+    audioSel.value = 'battleship';
+    setStatus('Loaded Battleship');
+  }'''
+new_load = '''  if (name === 'battleship') {
+    source.value = BATTLESHIP_SOURCE;
+    exampleSel.value = 'battleship';
+    audioSel.value = 'battleship';
+    setStatus('Loaded Battleship');
+  }'''
+if old_load in app:
+    app = app.replace(old_load, new_load, 1)
+elif 'source.value = BATTLESHIP_SOURCE;' not in app:
+    raise SystemExit('Could not locate Battleship loader in app.js')
+
+old_listener = "playBattleshipBtn.addEventListener('click', () => startProgram({ battleship: true }));"
+new_listener = '''playBattleshipBtn.addEventListener('click', async () => {
+  try { await startProgram({ battleship: true }); }
+  catch (err) { setStatus(`Could not start: ${err.message || String(err)}`, 'error'); }
+});'''
+if old_listener in app:
+    app = app.replace(old_listener, new_listener, 1)
+
+app_path.write_text(app)
+
+# Force browsers off the first cached JS bundle and prefer fresh HTML/JS/CSS.
+sw = sw_path.read_text()
+sw = sw.replace("const CACHE = 'symblicity-web-v1';", "const CACHE = 'symblicity-web-v2';")
+old_fetch = '''self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(res => {
+    const copy = res.clone();
+    caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    return res;
+  })));
+});'''
+new_fetch = '''self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET') return;
+  const url = new URL(event.request.url);
+  const fresh = event.request.mode === 'navigate' || /\\.(?:js|css)$/.test(url.pathname);
+  if (fresh) {
+    event.respondWith(fetch(event.request).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE).then(cache => cache.put(event.request, copy));
+      return res;
+    }).catch(() => caches.match(event.request)));
+    return;
+  }
+  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(res => {
+    const copy = res.clone();
+    caches.open(CACHE).then(cache => cache.put(event.request, copy));
+    return res;
+  })));
+});'''
+if old_fetch in sw:
+    sw = sw.replace(old_fetch, new_fetch, 1)
+sw_path.write_text(sw)
+
+print('Patched', app_path)
+print('Patched', sw_path)
