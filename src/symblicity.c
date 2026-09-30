@@ -276,7 +276,8 @@ int main(int ac,char **av) {
 	}
 	if(!(s=load(file))) { perror(file); return 1; }
 
-	u8 r[5]={0},mw[256]={0},my[256]={0},aw=0,ay=0,st[4096],t;
+	u8 r[5]={0},aw=0,ay=0,st[4096],t;
+	static u8 mem[65536];
 	u8 *A=&r[0],*B=&r[1];
 	size_t head=0,sp=0,mask=4095;
 	int bottom=0,d=1;
@@ -346,9 +347,11 @@ int main(int ac,char **av) {
 		case ',': printf("%u",(unsigned)*A); fflush(stdout); break;
 
 		case 'w': aw=*A; break;           case 'W': *A=aw; break;
-		case 'x': mw[aw]=*A; break;       case 'X': *A=mw[aw]; break;
 		case 'y': ay=*A; break;           case 'Y': *A=ay; break;
-		case 'z': my[ay]=*A; break;       case 'Z': *A=my[ay]; break;
+		case 'x': mem[(uint16_t)aw|((uint16_t)ay<<8)]=*A; break;
+		case 'X': *A=mem[(uint16_t)aw|((uint16_t)ay<<8)]; break;
+		case 'z': mem[(uint16_t)aw|((uint16_t)ay<<8)]=*A; break;
+		case 'Z': *A=mem[(uint16_t)aw|((uint16_t)ay<<8)]; break;
 
 		case 'U':
 			if(audio.count) audio.selected=(audio.selected+1)%audio.count;

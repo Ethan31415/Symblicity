@@ -182,8 +182,12 @@ This is useful when an inline function and its continuation need to occupy the s
 Always reserved by the VM:
 
 ```text
-w/W  x/X  y/Y  z/Z
+w/W  y/Y      16-bit address bytes
+x/X  z/Z      aliases for the same unified memory access
 ```
+
+The duplicated `x/X` and `z/Z` data-access pairs are intentional for now.
+One pair is reserved for a future additional address-byte extension.
 
 Reserved by the standard program-layout convention:
 

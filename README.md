@@ -104,7 +104,7 @@ The current VM includes:
 - Five 8-bit registers (`R0`..`R4`) with selectable A/B banks.
 - Shared result register `R2`.
 - A double-ended stack.
-- Two 256-byte memory spaces through `w/W/x/X` and `y/Y/z/Z`.
+- One 65,536-byte memory space with a combined 16-bit address: `w/W` controls the low byte, `y/Y` the high byte, and both `x/X` and `z/Z` access the same memory byte.
 - Direction-sensitive case-pair letter jumps.
 - Bidirectional `{}` execution.
 - `[]` loops; **`~` breaks only the innermost enclosing `[]` loop**.

@@ -63,18 +63,26 @@ Division or modulo by zero yields 0.
 
 ## Memory
 
-Two independent 256-byte spaces are available:
+Symblicity has one 65,536-byte memory space addressed by two 8-bit address registers.
 
-- `w`: address-W = A
-- `W`: A = address-W
-- `x`: mem-W[address-W] = A
-- `X`: A = mem-W[address-W]
-- `y`: address-Y = A
-- `Y`: A = address-Y
-- `z`: mem-Y[address-Y] = A
-- `Z`: A = mem-Y[address-Y]
+```text
+address = (high << 8) | low
+```
 
-These letters are reserved and do not perform case-pair jumps.
+- `w`: low address byte = A
+- `W`: A = low address byte
+- `y`: high address byte = A
+- `Y`: A = high address byte
+- `x`: memory[address] = A
+- `X`: A = memory[address]
+- `z`: memory[address] = A
+- `Z`: A = memory[address]
+
+`x/X` and `z/Z` are intentionally aliases: both access the exact same byte
+in the same unified memory. This leaves one complete data-access pair redundant
+and available to be repurposed as a future additional address-byte extension.
+
+All eight letters remain reserved and do not perform case-pair jumps.
 
 ## Control flow
 
