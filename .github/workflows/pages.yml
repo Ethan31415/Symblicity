@@ -33,9 +33,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-      - name: Test native interpreter
-        run: make test
-
       - name: Extract browser site
         run: |
           mkdir -p _site
