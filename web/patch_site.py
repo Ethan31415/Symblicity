@@ -377,15 +377,7 @@ app = app.replace(
     1,
 )
 
-old_terminal_listener = """source.addEventListener('keydown', (ev) => {
-  if (ev.key !== 'Tab') return;
-  ev.preventDefault();
-  const start = source.selectionStart;
-  const end = source.selectionEnd;
-  source.setRangeText('\t', start, end, 'end');
-});
-
-terminalEl.addEventListener('keydown', (ev) => {
+old_terminal_listener = """terminalEl.addEventListener('keydown', (ev) => {
   if (!running) return;
   const bytes = keyBytes(ev);
   if (!bytes) return;
@@ -415,6 +407,22 @@ new_terminal_listener = """terminalEl.addEventListener('keydown', (ev) => {
 if old_terminal_listener not in app:
     raise SystemExit("Could not locate terminal key handler")
 app = app.replace(old_terminal_listener, new_terminal_listener, 1)
+
+# Keep Tab inside the Symblicity source editor. A literal TAB is meaningful
+# source (comment-to-end-of-line), so insert the character instead of changing focus.
+source_tab_handler = """source.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Tab') return;
+  ev.preventDefault();
+  const start = source.selectionStart;
+  const end = source.selectionEnd;
+  source.setRangeText('\\t', start, end, 'end');
+});
+"""
+if source_tab_handler not in app:
+    terminal_key_anchor = "terminalEl.addEventListener('keydown', (ev) => {"
+    if terminal_key_anchor not in app:
+        raise SystemExit("Could not locate terminal key handler for Tab insertion")
+    app = app.replace(terminal_key_anchor, source_tab_handler + "\n" + terminal_key_anchor, 1)
 
 old_step = """stepBtn.addEventListener('click', async () => {
   stopProgram(false);
@@ -590,7 +598,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v11"
+release = "v12"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
