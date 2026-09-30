@@ -125,11 +125,41 @@ new_listener = '''playBattleshipBtn.addEventListener('click', async () => {
 if old_listener in app:
     app = app.replace(old_listener, new_listener, 1)
 
+# The VM constructor immediately emits an initial state through onState().
+# updateState() reads these variables, so they must exist before new SymblicityVM().
+state_old = """const terminal = new Terminal(terminalEl);
+const audio = new BrowserAudio();
+const vm = new SymblicityVM({"""
+state_new = """let running = false;
+let waitTimer = null;
+let renderPending = false;
+let lastStateRender = 0;
+
+const terminal = new Terminal(terminalEl);
+const audio = new BrowserAudio();
+const vm = new SymblicityVM({"""
+if state_old in app:
+    app = app.replace(state_old, state_new, 1)
+
+late_state = """let running = false;
+let waitTimer = null;
+let renderPending = false;
+let lastStateRender = 0;
+
+function setStatus"""
+if late_state in app:
+    app = app.replace(late_state, "function setStatus", 1)
+
+# Deployment smoke guard: if this invariant is broken, fail the workflow instead
+# of publishing a page whose controls never initialize.
+if app.index("let running = false;") > app.index("new SymblicityVM("):
+    raise SystemExit("Browser startup invariant failed: running initialized after VM")
+
 app_path.write_text(app)
 
 # Force browsers off the first cached JS bundle and prefer fresh HTML/JS/CSS.
 sw = sw_path.read_text()
-sw = sw.replace("const CACHE = 'symblicity-web-v1';", "const CACHE = 'symblicity-web-v2';")
+sw = sw.replace("const CACHE = 'symblicity-web-v1';", "const CACHE = 'symblicity-web-v3';")
 old_fetch = '''self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(res => {
