@@ -140,33 +140,23 @@ new_listener = '''playBattleshipBtn.addEventListener('click', async () => {
 if old_listener in app:
     app = app.replace(old_listener, new_listener, 1)
 
-# The VM constructor immediately emits an initial state through onState().
-# updateState() reads these variables, so they must exist before new SymblicityVM().
-state_old = """const terminal = new Terminal(terminalEl);
-const audio = new BrowserAudio();
-const vm = new SymblicityVM({"""
-state_new = """let running = false;
-let waitTimer = null;
-let renderPending = false;
-let lastStateRender = 0;
+# Final startup-state canonicalization. Earlier transforms may modify the
+# surrounding code, so remove every declaration block and insert exactly one
+# immediately before terminal/audio/VM construction.
+state_decl_re = re.compile(
+    r"let running = false;\n"
+    r"let waitTimer = null;\n"
+    r"let renderPending = false;\n"
+    r"let lastStateRender = 0;\n+"
+)
+app = state_decl_re.sub("", app)
+terminal_anchor = "const terminal = new Terminal(terminalEl);"
+if terminal_anchor not in app:
+    raise SystemExit("Could not locate terminal initialization in app.js")
+app = app.replace(terminal_anchor, state_block + "\n" + terminal_anchor, 1)
 
-const terminal = new Terminal(terminalEl);
-const audio = new BrowserAudio();
-const vm = new SymblicityVM({"""
-if state_old in app:
-    app = app.replace(state_old, state_new, 1)
-
-late_state = """let running = false;
-let waitTimer = null;
-let renderPending = false;
-let lastStateRender = 0;
-
-function setStatus"""
-if late_state in app:
-    app = app.replace(late_state, "function setStatus", 1)
-
-# Deployment smoke guard: if this invariant is broken, fail the workflow instead
-# of publishing a page whose controls never initialize.
+if app.count("let running = false;") != 1:
+    raise SystemExit("Browser startup invariant failed: duplicate running declarations")
 if app.index("let running = false;") > app.index("new SymblicityVM("):
     raise SystemExit("Browser startup invariant failed: running initialized after VM")
 
@@ -174,7 +164,7 @@ app_path.write_text(app)
 
 # Force browsers off the first cached JS bundle and prefer fresh HTML/JS/CSS.
 sw = sw_path.read_text()
-sw = sw.replace("const CACHE = 'symblicity-web-v1';", "const CACHE = 'symblicity-web-v3';")
+sw = re.sub(r"const CACHE = 'symblicity-web-v\\d+';", "const CACHE = 'symblicity-web-v5';", sw)
 old_fetch = '''self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
   event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(res => {
