@@ -160,40 +160,70 @@ if app.count("let running = false;") != 1:
 if app.index("let running = false;") > app.index("new SymblicityVM("):
     raise SystemExit("Browser startup invariant failed: running initialized after VM")
 
+# Stop registering the old PWA service worker. It caused stale app.js files to
+# survive multiple otherwise-correct deployments.
+app = app.replace(
+    "if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});\n",
+    "",
+)
 app_path.write_text(app)
 
-# Force browsers off the first cached JS bundle and prefer fresh HTML/JS/CSS.
-sw = sw_path.read_text()
-sw = re.sub(r"const CACHE = 'symblicity-web-v\\d+';", "const CACHE = 'symblicity-web-v5';", sw)
-old_fetch = '''self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(res => {
-    const copy = res.clone();
-    caches.open(CACHE).then(cache => cache.put(event.request, copy));
-    return res;
-  })));
-});'''
-new_fetch = '''self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET') return;
-  const url = new URL(event.request.url);
-  const fresh = event.request.mode === 'navigate' || /\\.(?:js|css)$/.test(url.pathname);
-  if (fresh) {
-    event.respondWith(fetch(event.request).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(cache => cache.put(event.request, copy));
-      return res;
-    }).catch(() => caches.match(event.request)));
-    return;
-  }
-  event.respondWith(caches.match(event.request).then(hit => hit || fetch(event.request).then(res => {
-    const copy = res.clone();
-    caches.open(CACHE).then(cache => cache.put(event.request, copy));
-    return res;
-  })));
-});'''
-if old_fetch in sw:
-    sw = sw.replace(old_fetch, new_fetch, 1)
-sw_path.write_text(sw)
+# Publish versioned module filenames. Even a still-active old cache has never
+# seen these URLs, so it must go to the network.
+release = "v6"
+vm_source = (root / "symblicity.js").read_text()
+versioned_vm = root / f"symblicity-{release}.js"
+versioned_app = root / f"app-{release}.js"
+versioned_vm.write_text(vm_source)
+versioned_app.write_text(
+    app.replace(
+        "from './symblicity.js';",
+        f"from './symblicity-{release}.js';",
+        1,
+    )
+)
+
+# The fresh HTML proactively removes every old worker/cache before loading the
+# new versioned application module.
+index_path = root / "index.html"
+index = index_path.read_text()
+cleanup = """  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations()
+        .then(regs => Promise.all(regs.map(reg => reg.unregister())))
+        .catch(() => {});
+    }
+    if ('caches' in window) {
+      caches.keys()
+        .then(keys => Promise.all(keys.map(key => caches.delete(key))))
+        .catch(() => {});
+    }
+  </script>
+"""
+index = index.replace(
+    '  <script type="module" src="app.js"></script>',
+    cleanup + f'  <script type="module" src="app-{release}.js"></script>',
+    1,
+)
+index_path.write_text(index)
+
+# If a browser does independently check the old worker URL, make the replacement
+# worker remove itself and all legacy caches rather than caching anything else.
+sw_path.write_text("""self.addEventListener('install', event => {
+  event.waitUntil(self.skipWaiting());
+});
+self.addEventListener('activate', event => {
+  event.waitUntil(Promise.all([
+    self.registration.unregister(),
+    caches.keys().then(keys => Promise.all(keys.map(key => caches.delete(key)))),
+    self.clients.claim()
+  ]));
+});
+self.addEventListener('fetch', () => {});
+""")
 
 print('Patched', app_path)
-print('Patched', sw_path)
+print('Created', versioned_app)
+print('Created', versioned_vm)
+print('Patched', index_path)
+print('Disabled legacy service worker', sw_path)
