@@ -11,6 +11,20 @@ battle_path = root / 'examples' / 'battleship.sym'
 app = app_path.read_text()
 battle_b64 = base64.b64encode(battle_path.read_bytes()).decode('ascii')
 
+# app.js used to construct SymblicityVM before the UI runtime-state variables
+# existed. The VM constructor immediately invokes onState(), which called
+# updateState() and touched `running` while it was still in the temporal dead
+# zone. That aborts the whole module before any button listeners are attached.
+state_block = """let running = false;
+let waitTimer = null;
+let renderPending = false;
+let lastStateRender = 0;
+"""
+terminal_anchor = "const terminal = new Terminal(terminalEl);"
+if app.find(state_block) > app.find(terminal_anchor):
+    app = app.replace(state_block + "\n", "", 1)
+    app = app.replace(terminal_anchor, state_block + "\n" + terminal_anchor, 1)
+
 # Keep the one-click demo self-contained. The previous version fetched the game
 # after the button was pressed, so a path/cache/network failure looked like a
 # dead button.
