@@ -109,7 +109,7 @@ The current VM includes:
 - Bidirectional `{}` execution.
 - `[]` loops; **`~` breaks only the innermost enclosing `[]` loop**.
 - Relative `#` control flow using A.
-- Opposite-parenthesis return anchors.
+- A dedicated 4096-entry parenthesis return stack for nested calls and recursion.
 - Character and numeric input/output through the selected A register.
 - Optional asynchronous sound instructions.
 - Directional function overloading: the same letter pair can select different forward and backward implementations.
