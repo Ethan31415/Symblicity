@@ -377,7 +377,15 @@ app = app.replace(
     1,
 )
 
-old_terminal_listener = """terminalEl.addEventListener('keydown', (ev) => {
+old_terminal_listener = """source.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Tab') return;
+  ev.preventDefault();
+  const start = source.selectionStart;
+  const end = source.selectionEnd;
+  source.setRangeText('\t', start, end, 'end');
+});
+
+terminalEl.addEventListener('keydown', (ev) => {
   if (!running) return;
   const bytes = keyBytes(ev);
   if (!bytes) return;
@@ -582,7 +590,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v10"
+release = "v11"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
