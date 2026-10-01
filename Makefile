@@ -30,6 +30,13 @@ test: $(BIN)
 	@a=$$($(BIN) tests/time_byte.sym); sleep 0.02; b=$$($(BIN) tests/time_byte.sym); \
 		test "$$a" != "$$b"
 	@printf "ssse" | $(BIN) --input-wait 0 examples/terminal_zero.sym >/dev/null
+	@python3 - <<'PY'
+from pathlib import Path
+s = Path('examples/terminal_zero.sym').read_text()
+style = '`0134"6"5679"8999"6899"'
+assert s.count('`4210?#' + style) == 4, 'Terminal Zero menu highlight skip length drifted'
+assert '`234?#' + style not in s, 'stale 28-character menu highlight skip remains'
+PY
 	@echo "Symblicity smoke/input/file/time/Terminal Zero tests passed"
 
 install: $(BIN)

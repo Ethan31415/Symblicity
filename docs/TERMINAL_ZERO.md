@@ -36,6 +36,15 @@ W / S       move selection
 E / Enter   select
 ```
 
+### Menu rendering invariant
+
+The selected-style block is currently 23 Symblicity source characters long. The
+four conditional skips that bypass it for unselected items are kept at the same
+length. This matters because `#` is source-position based: a stale skip length can
+land in the middle of the following ANSI cursor sequence and print fragments such
+as cursor coordinates directly on screen. The Makefile smoke test checks this
+invariant.
+
 ## Binary stream animation
 
 The old fixed edge columns have been replaced by 20 independent binary streams.
