@@ -207,6 +207,60 @@ static int readnum_timed(u8 *out) {
 	*out=e==b?0:(u8)x;
 	return 1;
 }
+#define DATA_FILE_NAME_BASE 0xFF00u
+
+typedef struct {
+	FILE *fp;
+	char name[256];
+} DataFile;
+
+static int data_file_name(const u8 *mem,char out[256]) {
+	for(size_t i=0;i<256;i++) {
+		u8 b=mem[DATA_FILE_NAME_BASE+i];
+		if(!b) {
+			out[i]=0;
+			return i?1:0;
+		}
+		out[i]=(char)b;
+	}
+	return -1;
+}
+
+static int data_file_prepare(DataFile *f,const u8 *mem,int create) {
+	char name[256]; int rc=data_file_name(mem,name);
+	FILE *fp;
+	if(rc==0) {
+		fputs("sym: empty file name at 0xFF00\n",stderr);
+		return 0;
+	}
+	if(rc<0) {
+		fputs("sym: file name at 0xFF00 is not NUL-terminated within 256 bytes\n",stderr);
+		return 0;
+	}
+	if(f->fp&&!strcmp(f->name,name)) return 1;
+	if(f->fp) {
+		(void)fclose(f->fp);
+		f->fp=0;
+		f->name[0]=0;
+	}
+	errno=0;
+	fp=fopen(name,"r+b");
+	if(!fp&&create&&errno==ENOENT) fp=fopen(name,"w+b");
+	if(!fp) {
+		fprintf(stderr,"sym: file '%s': %s\n",name,strerror(errno));
+		return 0;
+	}
+	f->fp=fp;
+	memcpy(f->name,name,strlen(name)+1);
+	return 1;
+}
+
+static int data_file_barrier(DataFile *f) {
+	if(fseek(f->fp,0,SEEK_CUR)==0) return 1;
+	fprintf(stderr,"sym: file '%s': %s\n",f->name,strerror(errno));
+	return 0;
+}
+
 static int parse_input_wait(const char *text,int *out) {
 	char *end; long ms;
 	if(!strcmp(text,"infinite")||!strcmp(text,"inf")||!strcmp(text,"-1")) {
@@ -284,6 +338,7 @@ int main(int ac,char **av) {
 	size_t head=0,sp=0,mask=4095;
 	int bottom=0,d=1;
 	pos pc=0,q,ret_stack[4096]; size_t rsp=0; char caller=0;
+	DataFile data_file={0};
 
 	while(pc>=0&&pc<n) {
 		char o=s[pc];
@@ -359,12 +414,39 @@ int main(int ac,char **av) {
 			                     : ((uint16_t)aw|((uint16_t)ay<<8))];
 			break;
 		case 'z':
-			mem[legacy_memory ? (uint16_t)(0x100u|ay)
-			                  : ((uint16_t)aw|((uint16_t)ay<<8))]=*A;
-			break;
 		case 'Z':
-			*A=mem[legacy_memory ? (uint16_t)(0x100u|ay)
-			                     : ((uint16_t)aw|((uint16_t)ay<<8))];
+			if(legacy_memory) {
+				if(o=='z') mem[(uint16_t)(0x100u|ay)]=*A;
+				else *A=mem[(uint16_t)(0x100u|ay)];
+				break;
+			}
+			if(!data_file_prepare(&data_file,mem,o=='z')||
+			   !data_file_barrier(&data_file)) {
+				free(s); return 1;
+			}
+			if(o=='z') {
+				if(fputc(*A,data_file.fp)==EOF||fflush(data_file.fp)==EOF) {
+					fprintf(stderr,"sym: file '%s': %s\n",
+						data_file.name,strerror(errno));
+					free(s); return 1;
+				}
+				r[2]=0;
+			} else {
+				int v=fgetc(data_file.fp);
+				if(v==EOF) {
+					if(feof(data_file.fp)) {
+						clearerr(data_file.fp);
+						r[2]=1;
+					} else {
+						fprintf(stderr,"sym: file '%s': %s\n",
+							data_file.name,strerror(errno));
+						free(s); return 1;
+					}
+				} else {
+					*A=(u8)v;
+					r[2]=0;
+				}
+			}
 			break;
 
 		case 'U':
@@ -413,5 +495,6 @@ int main(int ac,char **av) {
 		}
 		pc+=d;
 	}
+	if(data_file.fp) (void)fclose(data_file.fp);
 	free(s); return 0;
 }

@@ -7,6 +7,8 @@ on:
       - 'examples/battleship.sym'
       - 'src/symblicity.c'
       - 'Makefile'
+      - 'tests/file_write.sym'
+      - 'tests/file_read.sym'
       - 'README.md'
       - 'docs/LANGUAGE.md'
       - 'web/site.tar.gz'
@@ -33,6 +35,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+      - name: Build and test native VM
+        run: make test
+
       - name: Extract browser site
         run: |
           mkdir -p _site

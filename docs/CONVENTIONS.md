@@ -183,12 +183,14 @@ This is useful when an inline function and its continuation need to occupy the s
 Always reserved by the VM:
 
 ```text
-w/W  y/Y      16-bit address bytes
-x/X  z/Z      aliases for the same unified memory access
+w/W  y/Y      16-bit memory address bytes
+x/X           unified-memory write/read
+z/Z           stateful binary file write/read
 ```
 
-The duplicated `x/X` and `z/Z` data-access pairs are intentional for now.
-One pair is reserved for a future additional address-byte extension.
+For normal programs, `z/Z` use the NUL-terminated file name stored at
+`0xFF00-0xFFFF`. The legacy `@memory legacy-2x256` directive retains the
+historical page-1 `z/Z` memory behavior for older programs such as Battleship.
 
 Reserved by the standard program-layout convention:
 

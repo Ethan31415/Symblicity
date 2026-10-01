@@ -104,7 +104,7 @@ The current VM includes:
 - Five 8-bit registers (`R0`..`R4`) with selectable A/B banks.
 - Shared result register `R2`.
 - A double-ended stack.
-- One 65,536-byte memory space with a combined 16-bit address: `w/W` controls the low byte, `y/Y` the high byte, and both `x/X` and `z/Z` access the same memory byte. Legacy programs can use the tab-comment directive `@memory legacy-2x256` to map the original two 256-byte banks onto pages 0 and 1; bundled Battleship uses this mode.
+- One 65,536-byte memory space with a combined 16-bit address: `w/W` controls the low byte, `y/Y` the high byte, and `x/X` read/write memory. `z/Z` provide a stateful binary file stream whose NUL-terminated filename lives at `0xFF00`. Native programs access host files; the browser uses persistent sandboxed storage. Legacy programs can use `@memory legacy-2x256` to retain the original page-0/page-1 `x/X` and `z/Z` behavior; bundled Battleship uses this mode.
 - Direction-sensitive case-pair letter jumps.
 - Bidirectional `{}` execution.
 - `[]` loops; **`~` breaks only the innermost enclosing `[]` loop**.

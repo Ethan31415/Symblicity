@@ -75,12 +75,30 @@ address = (high << 8) | low
 - `Y`: A = high address byte
 - `x`: memory[address] = A
 - `X`: A = memory[address]
-- `z`: memory[address] = A
-- `Z`: A = memory[address]
 
-`x/X` and `z/Z` are intentionally aliases: both access the exact same byte
-in the same unified memory. This leaves one complete data-access pair redundant
-and available to be repurposed as a future additional address-byte extension.
+The top 256 bytes, `0xFF00-0xFFFF`, remain ordinary memory but are also the
+file-name buffer used by `z/Z`.
+
+## File I/O
+
+`z/Z` provide one stateful binary file stream.
+
+- The file name is a NUL-terminated byte string beginning at memory address `0xFF00`.
+- The maximum file name is 255 bytes.
+- The first `Z` opens an existing file for binary read/write access and reads one byte.
+- The first `z` opens an existing file for binary read/write access, or creates it if it does not exist, then writes A.
+- `Z` reads the next byte into A.
+- `z` writes A at the current file position.
+- Reads and writes share one advancing file position.
+- If the file-name bytes change, the current file is closed and the newly named file is opened from position 0 on the next `z/Z`.
+- Successful reads and writes set `R2 = 0`.
+- Reading at EOF sets `R2 = 1` and leaves A unchanged.
+- File-system/open/read/write failures are VM errors.
+- Files are closed automatically when the native VM exits.
+
+The native VM accesses host files directly. The browser VM uses a persistent,
+origin-local sandbox backed by browser storage; browser file names therefore name
+sandbox files rather than arbitrary host paths.
 
 ### Legacy two-bank compatibility
 
@@ -102,7 +120,7 @@ y/Y + z/Z -> unified memory page 0x01 (0x0100-0x01FF)
 ```
 
 This is how the bundled Battleship program preserves its original memory layout.
-Programs without the directive use the normal combined 16-bit address model.
+Programs without the directive use the normal combined 16-bit address model and `z/Z` file I/O.
 
 All eight letters remain reserved and do not perform case-pair jumps.
 

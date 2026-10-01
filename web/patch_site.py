@@ -536,7 +536,11 @@ old_memory_reset = """    this.mw = new Uint8Array(256);
 new_memory_reset = """    this.memory = new Uint8Array(65536);
     this.aw = 0;
     this.ay = 0;
-    this.legacyMemory = source.includes('\\t@memory legacy-2x256');"""
+    this.legacyMemory = source.includes('\\t@memory legacy-2x256');
+    this.fileName = null;
+    this.filePos = 0;
+    this.fileData = null;
+    this.fileStorageKey = null;"""
 if old_memory_reset not in vm:
     raise SystemExit("Could not locate browser memory reset")
 vm = vm.replace(old_memory_reset, new_memory_reset, 1)
@@ -560,11 +564,65 @@ new_memory_ops = """      case 'w': this.aw = this.A; break;
         this.A = this.memory[this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw)];
         break;
       case 'z':
-        this.memory[this.legacyMemory ? (0x100 | this.ay) : ((this.ay << 8) | this.aw)] = this.A;
+      case 'Z': {
+        if (this.legacyMemory) {
+          if (o === 'z') this.memory[0x100 | this.ay] = this.A;
+          else this.A = this.memory[0x100 | this.ay];
+          break;
+        }
+
+        const bytes = [];
+        let terminated = false;
+        for (let i = 0; i < 256; i++) {
+          const b = this.memory[0xFF00 + i];
+          if (b === 0) { terminated = true; break; }
+          bytes.push(b);
+        }
+        if (!terminated) return this.fail('file name at 0xFF00 is not NUL-terminated within 256 bytes');
+        if (!bytes.length) return this.fail('empty file name at 0xFF00');
+
+        const name = String.fromCharCode(...bytes);
+        if (name !== this.fileName) {
+          const key = 'symblicity:file:' + encodeURIComponent(name);
+          let stored = null;
+          try {
+            stored = localStorage.getItem(key);
+          } catch (err) {
+            return this.fail('browser file storage unavailable: ' + (err.message || String(err)));
+          }
+          if (stored === null) {
+            if (o === 'Z') return this.fail('file not found: ' + name);
+            this.fileData = [];
+          } else {
+            try {
+              const parsed = JSON.parse(stored);
+              if (!Array.isArray(parsed)) throw new Error('invalid file data');
+              this.fileData = parsed.map(v => Number(v) & 255);
+            } catch (err) {
+              return this.fail('could not read browser file: ' + name);
+            }
+          }
+          this.fileName = name;
+          this.fileStorageKey = key;
+          this.filePos = 0;
+        }
+
+        if (o === 'z') {
+          this.fileData[this.filePos++] = this.A;
+          try {
+            localStorage.setItem(this.fileStorageKey, JSON.stringify(this.fileData));
+          } catch (err) {
+            return this.fail('could not write browser file: ' + this.fileName);
+          }
+          this.r[2] = 0;
+        } else if (this.filePos >= this.fileData.length) {
+          this.r[2] = 1;
+        } else {
+          this.A = this.fileData[this.filePos++];
+          this.r[2] = 0;
+        }
         break;
-      case 'Z':
-        this.A = this.memory[this.legacyMemory ? (0x100 | this.ay) : ((this.ay << 8) | this.aw)];
-        break;"""
+      }"""
 if old_memory_ops not in vm:
     raise SystemExit("Could not locate browser memory opcodes")
 vm = vm.replace(old_memory_ops, new_memory_ops, 1)
@@ -677,7 +735,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v15"
+release = "v16"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
