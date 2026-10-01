@@ -27,7 +27,9 @@ test: $(BIN)
 		$(BIN) tests/file_write.sym; \
 		test "$$(cat .sym_file_test.bin)" = "ABC"; \
 		test "$$($(BIN) tests/file_read.sym)" = "ABC1"
-	@echo "Symblicity smoke/input/file tests passed"
+	@a=$($(BIN) tests/time_byte.sym); sleep 0.02; b=$($(BIN) tests/time_byte.sym); \
+		test "$a" != "$b"
+	@echo "Symblicity smoke/input/file/time tests passed"
 
 install: $(BIN)
 	install -d "$(DESTDIR)$(PREFIX)/bin"

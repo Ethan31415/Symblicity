@@ -557,12 +557,18 @@ new_memory_ops = """      case 'w': this.aw = this.A; break;
       case 'W': this.A = this.aw; break;
       case 'y': this.ay = this.A; break;
       case 'Y': this.A = this.ay; break;
-      case 'x':
-        this.memory[this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw)] = this.A;
+      case 'x': {
+        const addr = this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw);
+        if (this.legacyMemory || addr !== 0xFEFF) this.memory[addr] = this.A;
         break;
-      case 'X':
-        this.A = this.memory[this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw)];
+      }
+      case 'X': {
+        const addr = this.legacyMemory ? this.aw : ((this.ay << 8) | this.aw);
+        this.A = (!this.legacyMemory && addr === 0xFEFF)
+          ? (Date.now() & 0xFF)
+          : this.memory[addr];
         break;
+      }
       case 'z':
       case 'Z': {
         if (this.legacyMemory) {
@@ -735,7 +741,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v16"
+release = "v17"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"

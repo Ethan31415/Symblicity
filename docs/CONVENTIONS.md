@@ -178,6 +178,19 @@ A = 1 -> # selects the post-return path
 
 This is useful when an inline function and its continuation need to occupy the same compact source region.
 
+## Reserved high-memory region
+
+The current VM reserves the top of the address space for host-facing state:
+
+```text
+0xFEFF          read-only wrapped system-time byte
+0xFF00-0xFFFF   NUL-terminated file-name buffer
+```
+
+`0xFEFF` returns Unix time in milliseconds modulo 256 when read with `X`.
+Writes to that byte through `x` are ignored. Code that wants a lightweight
+random seed can read this byte once and expand/mix it in software.
+
 ## Function-letter availability
 
 Always reserved by the VM:

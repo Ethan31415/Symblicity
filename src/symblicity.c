@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 typedef uint8_t u8;
@@ -207,7 +208,16 @@ static int readnum_timed(u8 *out) {
 	*out=e==b?0:(u8)x;
 	return 1;
 }
+#define SYSTEM_TIME_ADDR 0xFEFFu
 #define DATA_FILE_NAME_BASE 0xFF00u
+
+static u8 wrapped_system_time(void) {
+	struct timespec ts;
+	uint64_t ms;
+	if(clock_gettime(CLOCK_REALTIME,&ts)!=0) return 0;
+	ms=(uint64_t)ts.tv_sec*1000u+(uint64_t)ts.tv_nsec/1000000u;
+	return (u8)ms;
+}
 
 typedef struct {
 	FILE *fp;
@@ -405,14 +415,19 @@ int main(int ac,char **av) {
 
 		case 'w': aw=*A; break;           case 'W': *A=aw; break;
 		case 'y': ay=*A; break;           case 'Y': *A=ay; break;
-		case 'x':
-			mem[legacy_memory ? (uint16_t)aw
-			                  : ((uint16_t)aw|((uint16_t)ay<<8))]=*A;
+		case 'x': {
+			uint16_t addr=legacy_memory ? (uint16_t)aw
+				: ((uint16_t)aw|((uint16_t)ay<<8));
+			if(legacy_memory||addr!=SYSTEM_TIME_ADDR) mem[addr]=*A;
 			break;
-		case 'X':
-			*A=mem[legacy_memory ? (uint16_t)aw
-			                     : ((uint16_t)aw|((uint16_t)ay<<8))];
+		}
+		case 'X': {
+			uint16_t addr=legacy_memory ? (uint16_t)aw
+				: ((uint16_t)aw|((uint16_t)ay<<8));
+			*A=(!legacy_memory&&addr==SYSTEM_TIME_ADDR)
+				? wrapped_system_time() : mem[addr];
 			break;
+		}
 		case 'z':
 		case 'Z':
 			if(legacy_memory) {

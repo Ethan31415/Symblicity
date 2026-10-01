@@ -76,6 +76,20 @@ address = (high << 8) | low
 - `x`: memory[address] = A
 - `X`: A = memory[address]
 
+### System-time byte
+
+Address `0xFEFF`, immediately before the file-name region, is a read-only
+memory-mapped clock byte.
+
+```text
+memory[0xFEFF] = Unix time in milliseconds mod 256
+```
+
+Reading `0xFEFF` with `X` returns the current low 8 bits of system time in
+milliseconds. Writing that address with `x` is ignored. The value therefore
+wraps from 255 back to 0 every 256 milliseconds and is useful for lightweight
+random seeds and timing jitter.
+
 The top 256 bytes, `0xFF00-0xFFFF`, remain ordinary memory but are also the
 file-name buffer used by `z/Z`.
 
