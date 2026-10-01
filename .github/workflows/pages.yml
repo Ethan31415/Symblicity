@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - 'examples/battleship.sym'
+      - 'examples/terminal_zero.sym'
+      - 'docs/TERMINAL_ZERO.md'
       - 'src/symblicity.c'
       - 'Makefile'
       - 'tests/file_write.sym'

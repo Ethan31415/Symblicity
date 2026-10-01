@@ -117,6 +117,18 @@ The current VM includes:
 
 See [docs/LANGUAGE.md](docs/LANGUAGE.md) for the instruction reference and [docs/CONVENTIONS.md](docs/CONVENTIONS.md) for the standard program-layout and function conventions.
 
+## Terminal Zero demo
+
+The in-progress roguelike demo lives at `examples/terminal_zero.sym`. Its first
+foundation includes the animated binary main menu, nested helper routines, and the
+initial multi-cell entity/movement memory layout. Run it with:
+
+```sh
+sym -u --input-wait 80 examples/terminal_zero.sym
+```
+
+See [docs/TERMINAL_ZERO.md](docs/TERMINAL_ZERO.md) for the current engine layout.
+
 ## Browser playground
 
 The complete static browser site is stored in `web/site.tar.gz` and deployed by
