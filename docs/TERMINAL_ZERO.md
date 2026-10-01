@@ -24,10 +24,11 @@ EXIT
 ```
 
 Only visible characters in the selected menu art are highlighted. The selected
-art uses bright-white foreground while all unselected menu art stays green. This
-avoids background-color/reverse-video sequences that the browser terminal does not
-render reliably. Blank padding is never printed while the highlight is active, so
-only the word itself changes color.
+art uses bright-white foreground on a green background while all unselected menu
+art stays green on the normal terminal background. The browser simulator now
+implements ANSI green background SGR directly, so the native VM and browser use
+the same `ESC[97;42m` selection sequence. Blank padding is never printed while
+the highlight is active, so only the visible word art receives the background.
 
 Controls:
 
@@ -38,7 +39,7 @@ E / Enter   select
 
 ### Menu rendering invariant
 
-The selected-style block is currently 23 Symblicity source characters long. The
+The selected-style block is currently 29 Symblicity source characters long. The
 four conditional skips that bypass it for unselected items are kept at the same
 length. This matters because `#` is source-position based: a stale skip length can
 land in the middle of the following ANSI cursor sequence and print fragments such
@@ -89,7 +90,7 @@ Colors:
 binary streams      ANSI 32 / bright heads 92
 title               ANSI 97
 normal menu         ANSI 32
-selected menu       ANSI 97
+selected menu       ANSI 97;42
 control hint        ANSI 2;32
 ```
 

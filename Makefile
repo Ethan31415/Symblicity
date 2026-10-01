@@ -33,9 +33,10 @@ test: $(BIN)
 	@python3 - <<'PY'
 from pathlib import Path
 s = Path('examples/terminal_zero.sym').read_text()
-style = '`0134"6"5679"8999"6899"'
-assert s.count('`4210?#' + style) == 4, 'Terminal Zero menu highlight skip length drifted'
-assert '`234?#' + style not in s, 'stale 28-character menu highlight skip remains'
+style = '`0134"6"5679"9"2"8999"9"6899"'
+assert len(style) == 29
+assert s.count('`589?#' + style) == 4, 'Terminal Zero menu highlight skip length drifted'
+assert '`4210?#' + style not in s, 'stale 23-character menu highlight skip remains'
 PY
 	@echo "Symblicity smoke/input/file/time/Terminal Zero tests passed"
 

@@ -18,6 +18,27 @@ app = app_path.read_text()
 battle_b64 = base64.b64encode(battle_path.read_bytes()).decode('ascii')
 terminal_zero_b64 = base64.b64encode(repo_terminal_zero_path.read_bytes()).decode('ascii')
 
+# Complete the terminal's standard 8-color ANSI background support. The packed
+# browser terminal originally implemented only black/red/yellow backgrounds,
+# so SGR 42 (green) was silently ignored.
+old_bg_sgr = """      else if (p === 40) this.bg = 'bg-black';
+      else if (p === 41) this.bg = 'bg-red';
+      else if (p === 43 || p === 103) this.bg = 'bg-yellow';
+      else if (p === 49) this.bg = 'bg-default';"""
+new_bg_sgr = """      else if (p === 40 || p === 100) this.bg = 'bg-black';
+      else if (p === 41 || p === 101) this.bg = 'bg-red';
+      else if (p === 42 || p === 102) this.bg = 'bg-green';
+      else if (p === 43 || p === 103) this.bg = 'bg-yellow';
+      else if (p === 44 || p === 104) this.bg = 'bg-blue';
+      else if (p === 45 || p === 105) this.bg = 'bg-magenta';
+      else if (p === 46 || p === 106) this.bg = 'bg-cyan';
+      else if (p === 47 || p === 107) this.bg = 'bg-white';
+      else if (p === 49) this.bg = 'bg-default';"""
+if old_bg_sgr in app:
+    app = app.replace(old_bg_sgr, new_bg_sgr, 1)
+elif "p === 42 || p === 102" not in app:
+    raise SystemExit("Could not locate browser terminal background SGR table")
+
 # app.js used to construct SymblicityVM before the UI runtime-state variables
 # existed. The VM constructor immediately invokes onState(), so these variables
 # must exist before the VM is constructed. Make this transformation idempotent:
@@ -823,7 +844,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v19"
+release = "v20"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
@@ -877,6 +898,12 @@ fullscreen_css = r'''
       padding: .4rem .75rem;
       cursor: pointer;
     }
+
+    .bg-green { background: #168f46; }
+    .bg-blue { background: #205aa8; }
+    .bg-magenta { background: #8a398f; }
+    .bg-cyan { background: #148b94; }
+    .bg-white { background: #e8eef2; }
 
     .terminal-panel:fullscreen {
       box-sizing: border-box;
