@@ -66,6 +66,9 @@ jobs:
           cp _site/symblicity.js /tmp/symblicity.mjs
           node --check /tmp/app.mjs
           node --check /tmp/symblicity.mjs
+          grep -Fq "p === 42 || p === 102" _site/app.js
+          grep -Fq ".bg-green" _site/index.html
+          grep -Fq "app-v21.js" _site/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
