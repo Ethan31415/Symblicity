@@ -15,6 +15,10 @@ register/state display, local `.sym` loading, Web Audio support, and a one-click
 Battleship demo. It does not require a compiler, FFmpeg, `ffplay`, or terminal
 configuration.
 
+The terminal panel also has a **Fullscreen** control. Fullscreen expands only the
+program terminal, which is useful for larger ANSI applications such as Terminal
+Zero while leaving the simulator/editor UI outside the fullscreen view.
+
 ## Build
 
 ```sh

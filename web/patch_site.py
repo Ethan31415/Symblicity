@@ -737,11 +737,62 @@ app = app.replace(
     "if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});\n",
     "",
 )
+
+# Add a terminal-only Fullscreen mode. This is intentionally attached to the
+# terminal panel instead of the entire simulator so games can use the full
+# viewport while the editor/debug UI stays out of the way.
+fullscreen_js = r'''
+function installTerminalFullscreen() {
+  const panel = terminalEl.closest('.terminal-panel');
+  if (!panel || document.getElementById('terminal-fullscreen')) return;
+
+  terminalEl.classList.add('terminal-fullscreen-target');
+
+  const button = document.createElement('button');
+  button.id = 'terminal-fullscreen';
+  button.type = 'button';
+  button.textContent = 'Fullscreen';
+  button.title = 'Toggle fullscreen terminal';
+  button.setAttribute('aria-label', 'Toggle fullscreen terminal');
+
+  panel.insertBefore(button, panel.firstChild);
+
+  const updateButton = () => {
+    const active = document.fullscreenElement === panel;
+    button.textContent = active ? 'Exit Fullscreen' : 'Fullscreen';
+    button.setAttribute('aria-pressed', active ? 'true' : 'false');
+    if (active) {
+      requestAnimationFrame(() => terminalEl.focus({ preventScroll: true }));
+    }
+  };
+
+  button.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement === panel) {
+        await document.exitFullscreen();
+      } else {
+        if (document.fullscreenElement) await document.exitFullscreen();
+        await panel.requestFullscreen();
+      }
+    } catch (err) {
+      setStatus('Fullscreen unavailable: ' + (err.message || String(err)), 'error');
+    }
+  });
+
+  document.addEventListener('fullscreenchange', updateButton);
+  updateButton();
+}
+
+installTerminalFullscreen();
+'''
+if "installTerminalFullscreen()" not in app:
+    app += "\n" + fullscreen_js + "\n"
+
 app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v17"
+release = "v18"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
@@ -787,6 +838,49 @@ index = index.replace(
     cleanup + f'  <script type="module" src="app-{release}.js"></script>',
     1,
 )
+
+fullscreen_css = r'''
+  <style id="terminal-fullscreen-style">
+    #terminal-fullscreen {
+      margin: 0 0 .55rem auto;
+      padding: .4rem .75rem;
+      cursor: pointer;
+    }
+
+    .terminal-panel:fullscreen {
+      box-sizing: border-box;
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 12px;
+      background: #05020b;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .terminal-panel:fullscreen #terminal-fullscreen {
+      flex: 0 0 auto;
+      z-index: 2;
+    }
+
+    .terminal-panel:fullscreen .terminal-fullscreen-target {
+      box-sizing: border-box;
+      flex: 1 1 auto;
+      min-width: 0;
+      min-height: 0;
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: auto;
+      font-size: clamp(10px, 1.12vw, 18px);
+      line-height: 1.05;
+    }
+  </style>
+'''
+if 'id="terminal-fullscreen-style"' not in index:
+    index = index.replace('</head>', fullscreen_css + '\n</head>', 1)
+
 index_path.write_text(index)
 
 # If a browser does independently check the old worker URL, make the replacement

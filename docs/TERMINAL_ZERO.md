@@ -23,8 +23,11 @@ HELP
 EXIT
 ```
 
-Only visible characters in the selected menu art are drawn with reverse-video
-highlighting. Blank padding is never highlighted.
+Only visible characters in the selected menu art are highlighted. The selected
+art uses bright-white foreground plus a green background rather than ANSI reverse
+video, so the highlight also remains obvious in the browser simulator. Blank
+padding is never printed while the highlight is active, so only the word itself
+is highlighted.
 
 Controls:
 
@@ -77,7 +80,7 @@ Colors:
 binary streams      ANSI 32 / bright heads 92
 title               ANSI 97
 normal menu         ANSI 32
-selected menu       ANSI 7;92
+selected menu       ANSI 97 + ANSI 42
 control hint        ANSI 2;32
 ```
 
