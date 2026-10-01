@@ -24,10 +24,10 @@ EXIT
 ```
 
 Only visible characters in the selected menu art are highlighted. The selected
-art uses bright-white foreground plus a green background rather than ANSI reverse
-video, so the highlight also remains obvious in the browser simulator. Blank
-padding is never printed while the highlight is active, so only the word itself
-is highlighted.
+art uses bright-white foreground while all unselected menu art stays green. This
+avoids background-color/reverse-video sequences that the browser terminal does not
+render reliably. Blank padding is never printed while the highlight is active, so
+only the word itself changes color.
 
 Controls:
 
@@ -80,7 +80,7 @@ Colors:
 binary streams      ANSI 32 / bright heads 92
 title               ANSI 97
 normal menu         ANSI 32
-selected menu       ANSI 97 + ANSI 42
+selected menu       ANSI 97
 control hint        ANSI 2;32
 ```
 

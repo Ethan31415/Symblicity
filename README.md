@@ -126,7 +126,10 @@ See [docs/LANGUAGE.md](docs/LANGUAGE.md) for the instruction reference and [docs
 The in-progress roguelike demo lives at `examples/terminal_zero.sym`. Its current
 foundation includes the full TERMINAL ZERO ASCII title, animated multi-speed binary
 streams, large START/LOAD/HELP/EXIT menu art, nested helpers, and the initial
-multi-cell entity/movement memory layout. Run it with:
+multi-cell entity/movement memory layout.
+
+The browser playground now also exposes **Terminal Zero** directly in the Example
+selector and automatically sets its input wait to 80 ms. Run it with:
 
 ```sh
 sym -u --input-wait 80 examples/terminal_zero.sym

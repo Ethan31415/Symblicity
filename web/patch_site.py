@@ -8,6 +8,7 @@ app_path = root / 'app.js'
 sw_path = root / 'sw.js'
 battle_path = root / 'examples' / 'battleship.sym'
 repo_battle_path = Path('examples/battleship.sym')
+repo_terminal_zero_path = Path('examples/terminal_zero.sym')
 
 # Keep the deployed simulator's Battleship source in sync with the canonical
 # repository example instead of the older copy packed inside site.tar.gz.
@@ -15,6 +16,7 @@ battle_path.write_bytes(repo_battle_path.read_bytes())
 
 app = app_path.read_text()
 battle_b64 = base64.b64encode(battle_path.read_bytes()).decode('ascii')
+terminal_zero_b64 = base64.b64encode(repo_terminal_zero_path.read_bytes()).decode('ascii')
 
 # app.js used to construct SymblicityVM before the UI runtime-state variables
 # existed. The VM constructor immediately invokes onState(), so these variables
@@ -40,6 +42,15 @@ if 'const BATTLESHIP_SOURCE = atob(' not in app:
         "import { SymblicityVM } from './symblicity.js';\n\n"
         "// Embedded at deploy time so Play Battleship never needs a second request.\n"
         f"const BATTLESHIP_SOURCE = atob('{battle_b64}');\n",
+        1,
+    )
+
+if 'const TERMINAL_ZERO_SOURCE = atob(' not in app:
+    app = app.replace(
+        "const BATTLESHIP_SOURCE = atob('" + battle_b64 + "');\n",
+        "const BATTLESHIP_SOURCE = atob('" + battle_b64 + "');\n"
+        "// Embedded Terminal Zero example; no extra network request is needed.\n"
+        f"const TERMINAL_ZERO_SOURCE = atob('{terminal_zero_b64}');\n",
         1,
     )
 
@@ -126,7 +137,15 @@ old_load = '''  if (name === 'battleship') {
     audioSel.value = 'battleship';
     setStatus('Loaded Battleship');
   }'''
-new_load = '''  if (name === 'battleship') {
+new_load = '''  if (name === 'terminal_zero') {
+    source.value = TERMINAL_ZERO_SOURCE;
+    exampleSel.value = 'terminal_zero';
+    audioSel.value = 'none';
+    inputWaitEl.value = '80';
+    setStatus('Loaded Terminal Zero');
+    return;
+  }
+  if (name === 'battleship') {
     source.value = BATTLESHIP_SOURCE;
     exampleSel.value = 'battleship';
     audioSel.value = 'battleship';
@@ -784,6 +803,18 @@ function installTerminalFullscreen() {
 }
 
 installTerminalFullscreen();
+
+function installTerminalZeroExample() {
+  if (!exampleSel || exampleSel.querySelector('option[value="terminal_zero"]')) return;
+  const option = document.createElement('option');
+  option.value = 'terminal_zero';
+  option.textContent = 'Terminal Zero';
+  const battleship = exampleSel.querySelector('option[value="battleship"]');
+  if (battleship) battleship.insertAdjacentElement('afterend', option);
+  else exampleSel.appendChild(option);
+}
+
+installTerminalZeroExample();
 '''
 if "installTerminalFullscreen()" not in app:
     app += "\n" + fullscreen_js + "\n"
@@ -792,7 +823,7 @@ app_path.write_text(app)
 
 # Publish versioned module filenames. Even a still-active old cache has never
 # seen these URLs, so it must go to the network.
-release = "v18"
+release = "v19"
 vm_source = (root / "symblicity.js").read_text()
 versioned_vm = root / f"symblicity-{release}.js"
 versioned_app = root / f"app-{release}.js"
