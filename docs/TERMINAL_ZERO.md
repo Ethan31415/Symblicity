@@ -23,12 +23,11 @@ HELP
 EXIT
 ```
 
-Only visible characters in the selected menu art are highlighted. The selected
-art uses bright-white foreground on a green background while all unselected menu
-art stays green on the normal terminal background. The browser simulator now
-implements ANSI green background SGR directly, so the native VM and browser use
-the same `ESC[97;42m` selection sequence. Blank padding is never printed while
-the highlight is active, so only the visible word art receives the background.
+Each menu item is drawn inside a tight four-row word-sized box. Every redraw first
+paints the entire box green-on-default, including padding, which clears any previous
+selection background. If that item is selected, its four rows are then repainted
+white-on-green. The result is one solid rectangular highlight around the ASCII word,
+not disconnected background patches behind individual strokes.
 
 Controls:
 
@@ -39,12 +38,9 @@ E / Enter   select
 
 ### Menu rendering invariant
 
-The selected-style block is currently 29 Symblicity source characters long. The
-four conditional skips that bypass it for unselected items are kept at the same
-length. This matters because `#` is source-position based: a stale skip length can
-land in the middle of the following ANSI cursor sequence and print fragments such
-as cursor coordinates directly on screen. The Makefile smoke test checks this
-invariant.
+Selected rows are conditional independently, keeping every source-position skip
+well below the one-byte `#` limit. No conditional skips across an entire four-row
+ASCII block.
 
 ## Binary stream animation
 
