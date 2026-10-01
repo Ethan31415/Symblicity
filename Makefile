@@ -29,7 +29,7 @@ test: $(BIN)
 		test "$$($(BIN) tests/file_read.sym)" = "ABC1"
 	@a=$$($(BIN) tests/time_byte.sym); sleep 0.02; b=$$($(BIN) tests/time_byte.sym); \
 		test "$$a" != "$$b"
-	@printf "ssse" | $(BIN) --input-wait 0 examples/terminal_zero.sym >/dev/null
+	@printf "e\033ssse" | $(BIN) --input-wait 0 examples/terminal_zero.sym >/dev/null
 	@python3 -c 'from pathlib import Path; s=Path("examples/terminal_zero.sym").read_text(); assert "0)B" in s and "0)F" in s, "Terminal Zero menu renderer missing"'
 	@echo "Symblicity smoke/input/file/time/Terminal Zero tests passed"
 

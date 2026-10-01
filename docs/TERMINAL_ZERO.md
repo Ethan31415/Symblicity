@@ -131,15 +131,40 @@ g  help screen
 h  selection up
 i  selection down
 j  activate selection
-k  START/core placeholder
+k  START / first-room gameplay loop
 l  LOAD placeholder
 n  exit request
 o  terminal cleanup
 p  entity initialization
 q  redraw title/menu screen
-r  entity movement core
+r  3x3 player erase / bounded movement / redraw
 s  audio-state initialization
 ```
 
 The helper order is intentionally acyclic so directional letter lookup and the
 nested parenthesis return stack remain well-defined.
+
+
+## First playable room
+
+START now enters a static Node 00 access chamber instead of the placeholder
+screen. This first gameplay slice is deliberately deterministic while the entity
+and collision model is stabilized.
+
+- player sprite: 3x3 (`/^\\`, `|@|`, `\\v/`)
+- controls: W/A/S/D, case-insensitive
+- ESC returns to the animated main menu
+- whole-footprint collision against the room bounds
+- movement rendering erases only the old 3x3 footprint and redraws only the new one
+- the HUD shows the current entity anchor X/Y
+
+Current player-anchor limits are:
+
+```text
+x = 6..92
+y = 6..27
+```
+
+The next step is a memory-backed tile map so collision can use actual walls and
+objects instead of only rectangular room limits. After that, a second multi-cell
+entity can use the same overlap/collision path.
